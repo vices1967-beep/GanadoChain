@@ -76,56 +76,56 @@ flowchart LR
     %% Producción
     subgraph Producción
         P1[Productor] 
-        P1 -->|1. mintAnimal() con PRODUCER_ROLE| NFT[AnimalNFTUpgradeable]
-        P1 -->|2. mintBatch()/transferBatch() con MINTER_ROLE| ERC20[GanadoTokenUpgradeable]
-        P1 -->|3. registrarAnimal()/registrarLote() en Backend CRUD| Backend[Backend CRUD]
+        P1 -->|"1. mintAnimal con PRODUCER_ROLE"| NFT[AnimalNFTUpgradeable]
+        P1 -->|"2. mintBatch / transferBatch con MINTER_ROLE"| ERC20[GanadoTokenUpgradeable]
+        P1 -->|"3. registrarAnimal / registrarLote en Backend CRUD"| Backend[Backend CRUD]
     end
 
     %% Salud
     subgraph Salud
-        Vet[Veterinario] -->|4. registrarVacuna()/registrarTratamiento() con VET_ROLE| Backend
+        Vet[Veterinario] -->|"4. registrarVacuna / registrarTratamiento con VET_ROLE"| Backend
     end
 
     %% Procesamiento
     subgraph Procesamiento
-        Frio[Frigorífico] -->|5. registrarCorte()/registrarQR() con FRIGORIFICO_ROLE| Backend
+        Frio[Frigorífico] -->|"5. registrarCorte / registrarQR con FRIGORIFICO_ROLE"| Backend
     end
 
     %% Auditoría
     subgraph Auditoria
-        Auditor[Auditor] -->|6. consultarRegistros() con AUDITOR_ROLE| Registry[GanadoRegistryUpgradeable]
+        Auditor[Auditor] -->|"6. consultarRegistros con AUDITOR_ROLE"| Registry[GanadoRegistryUpgradeable]
     end
 
     %% Interacción con Registry
-    Backend -->|7. hashAnimal()/hashLote() -> updateRegistry() usando DAO_ROLE| Registry
-    ERC20 -->|8. mintByDAO()/mintByMinter() -> updateRegistry()| Registry
-    NFT -->|9. mintAnimal()/transferAnimal() -> updateRegistry() usando DAO_ROLE / UPGRADER_ROLE| Registry
+    Backend -->|"7. hashAnimal / hashLote -> updateRegistry usando DAO_ROLE"| Registry
+    ERC20 -->|"8. mintByDAO / mintByMinter -> updateRegistry"| Registry
+    NFT -->|"9. mintAnimal / transferAnimal -> updateRegistry usando DAO_ROLE / UPGRADER_ROLE"| Registry
 
     %% Pausa y Upgrade
     subgraph Control
         Admin[Admin / DAO_ROLE] 
-        Admin -->|10. pause()/unpause() con PAUSER_ROLE| ERC20
-        Admin -->|11. pause()/unpause() con PAUSER_ROLE| NFT
-        Admin -->|12. upgradeTo() con UPGRADER_ROLE| ERC20
-        Admin -->|13. upgradeTo() con UPGRADER_ROLE| NFT
-        Admin -->|14. upgradeTo() con UPGRADER_ROLE| Registry
+        Admin -->|"10. pause / unpause con PAUSER_ROLE"| ERC20
+        Admin -->|"11. pause / unpause con PAUSER_ROLE"| NFT
+        Admin -->|"12. upgradeTo con UPGRADER_ROLE"| ERC20
+        Admin -->|"13. upgradeTo con UPGRADER_ROLE"| NFT
+        Admin -->|"14. upgradeTo con UPGRADER_ROLE"| Registry
     end
 
     %% Safe Multisig
     subgraph SafeMultisig
         Safe[Safe Multisig]
-        ERC20 -.->|15. mintByDAO()/transferBatch() aprobadas| Safe
-        NFT -.->|16. mintAnimal()/transferAnimal() aprobadas| Safe
-        Registry -.->|17. updateRegistry() aprobadas| Safe
-        Backend -.->|18. acciones críticas aprobadas| Safe
-        Admin -.->|19. pause/upgrade críticas aprobadas| Safe
+        ERC20 -.->|"15. mintByDAO / transferBatch aprobadas"| Safe
+        NFT -.->|"16. mintAnimal / transferAnimal aprobadas"| Safe
+        Registry -.->|"17. updateRegistry aprobadas"| Safe
+        Backend -.->|"18. acciones críticas aprobadas"| Safe
+        Admin -.->|"19. pause / upgrade críticas aprobadas"| Safe
     end
 
     %% Consumidor
     subgraph Consumidor
-        QR[QR Corte] -->|20. consultaTrazabilidad()| Frontend[Frontend]
-        Frontend -->|21. solicita datos| Registry
-        Frontend -->|22. solicita datos| Backend
+        QR[QR Corte] -->|"20. consultaTrazabilidad"| Frontend[Frontend]
+        Frontend -->|"21. solicita datos"| Registry
+        Frontend -->|"22. solicita datos"| Backend
     end
 
     %% Roles y estilo
@@ -144,3 +144,4 @@ flowchart LR
     class Frio frigorifico;
     class Auditor auditor;
     class Admin admin;
+
