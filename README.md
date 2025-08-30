@@ -81,51 +81,58 @@ flowchart LR
         P1 -->|"3. registrarAnimal / registrarLote en Backend CRUD"| Backend[Backend CRUD]
     end
 
+    %% IoT y Sensores
+    subgraph IoT & Sensores
+        IoT[Caravanas Inteligentes / Sensores IoT] -->|"4. Datos en tiempo real: ubicación, temperatura, movimiento"| Backend
+        IoT -->|"5. Alertas tempranas de enfermedades"| Backend
+        IoT -->|"6. sincronización -> updateRegistry con IOT_ROLE"| Registry[GanadoRegistryUpgradeable]
+    end
+
     %% Salud
     subgraph Salud
-        Vet[Veterinario] -->|"4. registrarVacuna / registrarTratamiento con VET_ROLE"| Backend
+        Vet[Veterinario] -->|"7. registrarVacuna / registrarTratamiento con VET_ROLE"| Backend
     end
 
     %% Procesamiento
     subgraph Procesamiento
-        Frio[Frigorífico] -->|"5. registrarCorte / registrarQR con FRIGORIFICO_ROLE"| Backend
+        Frio[Frigorífico] -->|"8. registrarCorte / registrarQR con FRIGORIFICO_ROLE"| Backend
     end
 
     %% Auditoría
     subgraph Auditoria
-        Auditor[Auditor] -->|"6. consultarRegistros con AUDITOR_ROLE"| Registry[GanadoRegistryUpgradeable]
+        Auditor[Auditor] -->|"9. consultarRegistros con AUDITOR_ROLE"| Registry
     end
 
     %% Interacción con Registry
-    Backend -->|"7. hashAnimal / hashLote -> updateRegistry usando DAO_ROLE"| Registry
-    ERC20 -->|"8. mintByDAO / mintByMinter -> updateRegistry"| Registry
-    NFT -->|"9. mintAnimal / transferAnimal -> updateRegistry usando DAO_ROLE / UPGRADER_ROLE"| Registry
+    Backend -->|"10. hashAnimal / hashLote -> updateRegistry usando DAO_ROLE"| Registry
+    ERC20 -->|"11. mintByDAO / mintByMinter -> updateRegistry"| Registry
+    NFT -->|"12. mintAnimal / transferAnimal -> updateRegistry usando DAO_ROLE / UPGRADER_ROLE"| Registry
 
     %% Pausa y Upgrade
     subgraph Control
         Admin[Admin / DAO_ROLE] 
-        Admin -->|"10. pause / unpause con PAUSER_ROLE"| ERC20
-        Admin -->|"11. pause / unpause con PAUSER_ROLE"| NFT
-        Admin -->|"12. upgradeTo con UPGRADER_ROLE"| ERC20
-        Admin -->|"13. upgradeTo con UPGRADER_ROLE"| NFT
-        Admin -->|"14. upgradeTo con UPGRADER_ROLE"| Registry
+        Admin -->|"13. pause / unpause con PAUSER_ROLE"| ERC20
+        Admin -->|"14. pause / unpause con PAUSER_ROLE"| NFT
+        Admin -->|"15. upgradeTo con UPGRADER_ROLE"| ERC20
+        Admin -->|"16. upgradeTo con UPGRADER_ROLE"| NFT
+        Admin -->|"17. upgradeTo con UPGRADER_ROLE"| Registry
     end
 
     %% Safe Multisig
     subgraph SafeMultisig
         Safe[Safe Multisig]
-        ERC20 -.->|"15. mintByDAO / transferBatch aprobadas"| Safe
-        NFT -.->|"16. mintAnimal / transferAnimal aprobadas"| Safe
-        Registry -.->|"17. updateRegistry aprobadas"| Safe
-        Backend -.->|"18. acciones críticas aprobadas"| Safe
-        Admin -.->|"19. pause / upgrade críticas aprobadas"| Safe
+        ERC20 -.->|"18. mintByDAO / transferBatch aprobadas"| Safe
+        NFT -.->|"19. mintAnimal / transferAnimal aprobadas"| Safe
+        Registry -.->|"20. updateRegistry aprobadas"| Safe
+        Backend -.->|"21. acciones críticas aprobadas"| Safe
+        Admin -.->|"22. pause / upgrade críticas aprobadas"| Safe
     end
 
     %% Consumidor
     subgraph Consumidor
-        QR[QR Corte] -->|"20. consultaTrazabilidad"| Frontend[Frontend]
-        Frontend -->|"21. solicita datos"| Registry
-        Frontend -->|"22. solicita datos"| Backend
+        QR[QR Corte] -->|"23. consultaTrazabilidad"| Frontend[Frontend]
+        Frontend -->|"24. solicita datos"| Registry
+        Frontend -->|"25. solicita datos"| Backend
     end
 
     %% Roles y estilo
@@ -136,6 +143,7 @@ flowchart LR
     classDef frigorifico fill:#f9c,stroke:#333,stroke-width:2px;
     classDef auditor fill:#ccc,stroke:#333,stroke-width:2px;
     classDef admin fill:#fc9,stroke:#333,stroke-width:2px;
+    classDef iot fill:#c9f,stroke:#333,stroke-width:2px;
 
     class ERC20,NFT,Registry dao;
     class ERC20 minter;
@@ -144,4 +152,4 @@ flowchart LR
     class Frio frigorifico;
     class Auditor auditor;
     class Admin admin;
-
+    class IoT iot;
