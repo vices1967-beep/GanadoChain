@@ -21,6 +21,7 @@ contract GanadoTokenUpgradeable is Initializable, ERC20Upgradeable, AccessContro
     event BatchMinted(address indexed to, uint256 amount, string indexed batchId, address indexed operator);
     event CapUpdated(uint256 newCap);
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
@@ -63,7 +64,7 @@ contract GanadoTokenUpgradeable is Initializable, ERC20Upgradeable, AccessContro
     function mintByMinter(address to, uint256 amount, string calldata batchId) external whenNotPaused onlyRole(MINTER_ROLE) {
         uint256 capFor = minterCap[msg.sender];
         if (capFor > 0) {
-            require(minterMinted[msg.sender] + amount <= capFor, "Limite minter excedido"); // <-- acento eliminado
+            require(minterMinted[msg.sender] + amount <= capFor, "Limite minter excedido");
         }
         require(_cap == 0 || totalSupply() + amount <= _cap, "Cap excedido");
         minterMinted[msg.sender] += amount;

@@ -26,12 +26,16 @@ import type {
 export interface GanadoRegistryUpgradeableInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "AUDITOR_ROLE"
       | "DAO_ROLE"
       | "DEFAULT_ADMIN_ROLE"
+      | "FRIGORIFICO_ROLE"
+      | "IOT_ROLE"
+      | "PRODUCER_ROLE"
       | "UPGRADER_ROLE"
+      | "VET_ROLE"
       | "animalToLote"
       | "createLote"
-      | "getLoteAnimals"
       | "getRoleAdmin"
       | "getRoleMember"
       | "getRoleMemberCount"
@@ -42,6 +46,7 @@ export interface GanadoRegistryUpgradeableInterface extends Interface {
       | "nextLoteId"
       | "nft"
       | "proxiableUUID"
+      | "registerIoTData"
       | "renounceRole"
       | "revokeRole"
       | "supportsInterface"
@@ -56,6 +61,7 @@ export interface GanadoRegistryUpgradeableInterface extends Interface {
       | "AnimalAssociated"
       | "BeaconUpgraded"
       | "Initialized"
+      | "IoTDataRegistered"
       | "LoteCreated"
       | "RoleAdminChanged"
       | "RoleGranted"
@@ -63,15 +69,29 @@ export interface GanadoRegistryUpgradeableInterface extends Interface {
       | "Upgraded"
   ): EventFragment;
 
+  encodeFunctionData(
+    functionFragment: "AUDITOR_ROLE",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "DAO_ROLE", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "DEFAULT_ADMIN_ROLE",
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "FRIGORIFICO_ROLE",
+    values?: undefined
+  ): string;
+  encodeFunctionData(functionFragment: "IOT_ROLE", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "PRODUCER_ROLE",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "UPGRADER_ROLE",
     values?: undefined
   ): string;
+  encodeFunctionData(functionFragment: "VET_ROLE", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "animalToLote",
     values: [BigNumberish]
@@ -79,10 +99,6 @@ export interface GanadoRegistryUpgradeableInterface extends Interface {
   encodeFunctionData(
     functionFragment: "createLote",
     values: [AddressLike, BigNumberish, string, BigNumberish[]]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "getLoteAnimals",
-    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "getRoleAdmin",
@@ -119,6 +135,10 @@ export interface GanadoRegistryUpgradeableInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "registerIoTData",
+    values: [BigNumberish, string, string, string]
+  ): string;
+  encodeFunctionData(
     functionFragment: "renounceRole",
     values: [BytesLike, AddressLike]
   ): string;
@@ -140,24 +160,34 @@ export interface GanadoRegistryUpgradeableInterface extends Interface {
     values: [AddressLike, BytesLike]
   ): string;
 
+  decodeFunctionResult(
+    functionFragment: "AUDITOR_ROLE",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "DAO_ROLE", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "DEFAULT_ADMIN_ROLE",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "FRIGORIFICO_ROLE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(functionFragment: "IOT_ROLE", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "PRODUCER_ROLE",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "UPGRADER_ROLE",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "VET_ROLE", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "animalToLote",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "createLote", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "getLoteAnimals",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "getRoleAdmin",
     data: BytesLike
@@ -178,6 +208,10 @@ export interface GanadoRegistryUpgradeableInterface extends Interface {
   decodeFunctionResult(functionFragment: "nft", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "proxiableUUID",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "registerIoTData",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -240,6 +274,34 @@ export namespace InitializedEvent {
   export type OutputTuple = [version: bigint];
   export interface OutputObject {
     version: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace IoTDataRegisteredEvent {
+  export type InputTuple = [
+    animalId: BigNumberish,
+    deviceId: string,
+    dataHash: string,
+    metadata: string,
+    timestamp: BigNumberish
+  ];
+  export type OutputTuple = [
+    animalId: bigint,
+    deviceId: string,
+    dataHash: string,
+    metadata: string,
+    timestamp: bigint
+  ];
+  export interface OutputObject {
+    animalId: bigint;
+    deviceId: string;
+    dataHash: string;
+    metadata: string;
+    timestamp: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -385,11 +447,21 @@ export interface GanadoRegistryUpgradeable extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  AUDITOR_ROLE: TypedContractMethod<[], [string], "view">;
+
   DAO_ROLE: TypedContractMethod<[], [string], "view">;
 
   DEFAULT_ADMIN_ROLE: TypedContractMethod<[], [string], "view">;
 
+  FRIGORIFICO_ROLE: TypedContractMethod<[], [string], "view">;
+
+  IOT_ROLE: TypedContractMethod<[], [string], "view">;
+
+  PRODUCER_ROLE: TypedContractMethod<[], [string], "view">;
+
   UPGRADER_ROLE: TypedContractMethod<[], [string], "view">;
+
+  VET_ROLE: TypedContractMethod<[], [string], "view">;
 
   animalToLote: TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
 
@@ -402,12 +474,6 @@ export interface GanadoRegistryUpgradeable extends BaseContract {
     ],
     [bigint],
     "nonpayable"
-  >;
-
-  getLoteAnimals: TypedContractMethod<
-    [loteId: BigNumberish],
-    [bigint[]],
-    "view"
   >;
 
   getRoleAdmin: TypedContractMethod<[role: BytesLike], [string], "view">;
@@ -456,6 +522,17 @@ export interface GanadoRegistryUpgradeable extends BaseContract {
 
   proxiableUUID: TypedContractMethod<[], [string], "view">;
 
+  registerIoTData: TypedContractMethod<
+    [
+      animalId: BigNumberish,
+      deviceId: string,
+      dataHash: string,
+      metadata: string
+    ],
+    [void],
+    "nonpayable"
+  >;
+
   renounceRole: TypedContractMethod<
     [role: BytesLike, account: AddressLike],
     [void],
@@ -493,13 +570,28 @@ export interface GanadoRegistryUpgradeable extends BaseContract {
   ): T;
 
   getFunction(
+    nameOrSignature: "AUDITOR_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "DAO_ROLE"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "DEFAULT_ADMIN_ROLE"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "FRIGORIFICO_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "IOT_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "PRODUCER_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "UPGRADER_ROLE"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "VET_ROLE"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "animalToLote"
@@ -516,9 +608,6 @@ export interface GanadoRegistryUpgradeable extends BaseContract {
     [bigint],
     "nonpayable"
   >;
-  getFunction(
-    nameOrSignature: "getLoteAnimals"
-  ): TypedContractMethod<[loteId: BigNumberish], [bigint[]], "view">;
   getFunction(
     nameOrSignature: "getRoleAdmin"
   ): TypedContractMethod<[role: BytesLike], [string], "view">;
@@ -575,6 +664,18 @@ export interface GanadoRegistryUpgradeable extends BaseContract {
   getFunction(
     nameOrSignature: "proxiableUUID"
   ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "registerIoTData"
+  ): TypedContractMethod<
+    [
+      animalId: BigNumberish,
+      deviceId: string,
+      dataHash: string,
+      metadata: string
+    ],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "renounceRole"
   ): TypedContractMethod<
@@ -637,6 +738,13 @@ export interface GanadoRegistryUpgradeable extends BaseContract {
     InitializedEvent.InputTuple,
     InitializedEvent.OutputTuple,
     InitializedEvent.OutputObject
+  >;
+  getEvent(
+    key: "IoTDataRegistered"
+  ): TypedContractEvent<
+    IoTDataRegisteredEvent.InputTuple,
+    IoTDataRegisteredEvent.OutputTuple,
+    IoTDataRegisteredEvent.OutputObject
   >;
   getEvent(
     key: "LoteCreated"
@@ -717,6 +825,17 @@ export interface GanadoRegistryUpgradeable extends BaseContract {
       InitializedEvent.InputTuple,
       InitializedEvent.OutputTuple,
       InitializedEvent.OutputObject
+    >;
+
+    "IoTDataRegistered(uint256,string,string,string,uint256)": TypedContractEvent<
+      IoTDataRegisteredEvent.InputTuple,
+      IoTDataRegisteredEvent.OutputTuple,
+      IoTDataRegisteredEvent.OutputObject
+    >;
+    IoTDataRegistered: TypedContractEvent<
+      IoTDataRegisteredEvent.InputTuple,
+      IoTDataRegisteredEvent.OutputTuple,
+      IoTDataRegisteredEvent.OutputObject
     >;
 
     "LoteCreated(uint256,uint256,string,address)": TypedContractEvent<

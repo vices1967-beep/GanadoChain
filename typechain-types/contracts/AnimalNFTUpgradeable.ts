@@ -36,6 +36,7 @@ export interface AnimalNFTUpgradeableInterface extends Interface {
       | "approve"
       | "auditView"
       | "balanceOf"
+      | "burnAnimal"
       | "getApproved"
       | "getRoleAdmin"
       | "getRoleMember"
@@ -61,6 +62,7 @@ export interface AnimalNFTUpgradeableInterface extends Interface {
       | "tokenURI"
       | "transferFrom"
       | "unpause"
+      | "updateAnimalURI"
       | "updateOperational"
       | "updateProcessing"
       | "upgradeTo"
@@ -124,6 +126,10 @@ export interface AnimalNFTUpgradeableInterface extends Interface {
   encodeFunctionData(
     functionFragment: "balanceOf",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "burnAnimal",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "getApproved",
@@ -211,6 +217,10 @@ export interface AnimalNFTUpgradeableInterface extends Interface {
   ): string;
   encodeFunctionData(functionFragment: "unpause", values?: undefined): string;
   encodeFunctionData(
+    functionFragment: "updateAnimalURI",
+    values: [BigNumberish, string]
+  ): string;
+  encodeFunctionData(
     functionFragment: "updateOperational",
     values: [BigNumberish, string]
   ): string;
@@ -255,6 +265,7 @@ export interface AnimalNFTUpgradeableInterface extends Interface {
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "auditView", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "burnAnimal", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getApproved",
     data: BytesLike
@@ -316,6 +327,10 @@ export interface AnimalNFTUpgradeableInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "unpause", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "updateAnimalURI",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "updateOperational",
     data: BytesLike
@@ -663,6 +678,12 @@ export interface AnimalNFTUpgradeable extends BaseContract {
 
   balanceOf: TypedContractMethod<[owner: AddressLike], [bigint], "view">;
 
+  burnAnimal: TypedContractMethod<
+    [tokenId: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   getApproved: TypedContractMethod<[tokenId: BigNumberish], [string], "view">;
 
   getRoleAdmin: TypedContractMethod<[role: BytesLike], [string], "view">;
@@ -766,6 +787,12 @@ export interface AnimalNFTUpgradeable extends BaseContract {
 
   unpause: TypedContractMethod<[], [void], "nonpayable">;
 
+  updateAnimalURI: TypedContractMethod<
+    [tokenId: BigNumberish, newURI: string],
+    [void],
+    "nonpayable"
+  >;
+
   updateOperational: TypedContractMethod<
     [tokenId: BigNumberish, ipfsHash: string],
     [void],
@@ -832,6 +859,9 @@ export interface AnimalNFTUpgradeable extends BaseContract {
   getFunction(
     nameOrSignature: "balanceOf"
   ): TypedContractMethod<[owner: AddressLike], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "burnAnimal"
+  ): TypedContractMethod<[tokenId: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "getApproved"
   ): TypedContractMethod<[tokenId: BigNumberish], [string], "view">;
@@ -956,6 +986,13 @@ export interface AnimalNFTUpgradeable extends BaseContract {
   getFunction(
     nameOrSignature: "unpause"
   ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "updateAnimalURI"
+  ): TypedContractMethod<
+    [tokenId: BigNumberish, newURI: string],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "updateOperational"
   ): TypedContractMethod<

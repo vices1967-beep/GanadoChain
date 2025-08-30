@@ -1,14 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/*
-  GanadoRegistryUpgradeable
-  - Admin/DAO controla parámetros
-  - Asocia NFT -> loteToken (ERC20 batch), guarda IPFS hash de la asociación
-  - Permite "tokenizar" un animal (quemar NFT? No: mejor "lock" o crear lote y transferir tokens)
-  - Ejemplo simple: crea lote ERC20 via GanadoToken.mintByDAO y graba asociación
-*/
-
 import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -24,26 +16,42 @@ interface IAnimalNFT {
 contract GanadoRegistryUpgradeable is Initializable, AccessControlEnumerableUpgradeable, UUPSUpgradeable {
     bytes32 public constant DAO_ROLE = keccak256("DAO_ROLE");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
+    bytes32 public constant PRODUCER_ROLE = keccak256("PRODUCER_ROLE");
+    bytes32 public constant VET_ROLE = keccak256("VET_ROLE");
+    bytes32 public constant FRIGORIFICO_ROLE = keccak256("FRIGORIFICO_ROLE");
+    bytes32 public constant AUDITOR_ROLE = keccak256("AUDITOR_ROLE");
+    bytes32 public constant IOT_ROLE = keccak256("IOT_ROLE");
 
     IGanadoToken public token;
     IAnimalNFT public nft;
 
     struct Lote {
-        uint256 loteId; // id interno
-        string ipfsHash; // información del lote
-        uint256 amount; // cantidad de tokens emitidos (wei)
-        uint256[] animals; // animales asociados
+        uint256 loteId;
+        string ipfsHash;
+        uint256 amount;
+        uint256[] animals;
     }
 
-    mapping(uint256 => uint256) public animalToLote; // tokenId -> loteId
+    struct IoTData {
+        uint256 timestamp;
+        string deviceId;
+        string dataHash;
+        string metadata;
+    }
+
+    mapping(uint256 => IoTData[]) private _animalIoTData;
+    mapping(uint256 => uint256) public animalToLote;
     mapping(uint256 => Lote) public lotes;
     uint256 public nextLoteId;
 
     event LoteCreated(uint256 indexed loteId, uint256 amount, string ipfsHash, address operator);
     event AnimalAssociated(uint256 indexed loteId, uint256 indexed tokenId);
+    event IoTDataRegistered(uint256 indexed animalId, string deviceId, string dataHash, string metadata, uint256 timestamp);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() { _disableInitializers(); }
+    constructor() {
+        _disableInitializers();
+    }
 
     function initialize(address daoAdmin, address tokenAddr, address nftAddr) public initializer {
         __AccessControlEnumerable_init();
@@ -58,12 +66,6 @@ contract GanadoRegistryUpgradeable is Initializable, AccessControlEnumerableUpgr
         nextLoteId = 1;
     }
 
-    /**
-     * @notice Crear lote y emitir tokens (ejecutado por DAO)
-     * @param to dirección que recibe tokens (ej: frigorífico o mercado)
-     * @param amount cantidad de tokens a emitir (wei)
-     * @param ipfsHash metadatos del lote (IPFS CID)
-     */
     function createLote(address to, uint256 amount, string calldata ipfsHash, uint256[] calldata animals) external onlyRole(DAO_ROLE) returns (uint256) {
         uint256 id = nextLoteId++;
         Lote storage l = lotes[id];
@@ -71,7 +73,6 @@ contract GanadoRegistryUpgradeable is Initializable, AccessControlEnumerableUpgr
         l.ipfsHash = ipfsHash;
         l.amount = amount;
 
-        // Asociar animales
         for (uint i = 0; i < animals.length; i++) {
             uint256 t = animals[i];
             animalToLote[t] = id;
@@ -79,18 +80,17 @@ contract GanadoRegistryUpgradeable is Initializable, AccessControlEnumerableUpgr
             emit AnimalAssociated(id, t);
         }
 
-        // Mint tokens via GanadoToken (DAO-controlled)
         token.mintByDAO(to, amount, ipfsHash);
-
         emit LoteCreated(id, amount, ipfsHash, msg.sender);
         return id;
     }
 
-    function getLoteAnimals(uint256 loteId) external view returns (uint256[] memory) {
-        return lotes[loteId].animals;
+    function registerIoTData(uint256 animalId, string calldata deviceId, string calldata dataHash, string calldata metadata) external onlyRole(IOT_ROLE) {
+        IoTData memory entry = IoTData({ timestamp: block.timestamp, deviceId: deviceId, dataHash: dataHash, metadata: metadata });
+        _animalIoTData[animalId].push(entry);
+        emit IoTDataRegistered(animalId, deviceId, dataHash, metadata, entry.timestamp);
     }
 
-    // UUPS authorize
     function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}
 
     uint256[45] private __gap;

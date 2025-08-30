@@ -1,34 +1,26 @@
-import { HardhatUserConfig } from "hardhat/config";
-import "@nomicfoundation/hardhat-toolbox";
-import "@openzeppelin/hardhat-upgrades";
-import "dotenv/config";
+// hardhat.config.ts
+require("@nomiclabs/hardhat-ethers");
+require("@nomiclabs/hardhat-etherscan");
+require("@openzeppelin/hardhat-upgrades");
+require("dotenv").config();
 
-const RPC_URL = process.env.RPC_URL || "";
-const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
-const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY || "";
-
-const config: HardhatUserConfig = {
-  solidity: {
-    version: "0.8.20",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200,
-      },
-    },
-  },
+const config = {
+  solidity: "0.8.20",
   networks: {
     amoy: {
-      url: RPC_URL,
-      chainId: 80002, // Polygon Amoy testnet
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
+      url: process.env.RPC_URL || "",
+      accounts: [
+        process.env.PRIVATE_KEY!,
+        process.env.PRIVATE_KEY_2!,
+        process.env.PRIVATE_KEY_3!,
+      ],
     },
   },
   etherscan: {
     apiKey: {
-      polygonAmoy: ETHERSCAN_API_KEY,
-    },
-  },
+      polygonAmoy: process.env.ETHERSCAN_API_KEY || "B575EDK97J1KQMVJ7PP7G2EK2QTCRYREN2",
+    }
+  }
 };
 
-export default config;
+module.exports = config;

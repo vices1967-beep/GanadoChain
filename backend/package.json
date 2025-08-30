@@ -10,6 +10,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@safe-global/safe-core-sdk": "^3.3.5",
+    "@safe-global/safe-ethers-lib": "^1.9.4",
+    "body-parser": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "ethers": "^6.15.0",
