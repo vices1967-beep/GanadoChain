@@ -74,7 +74,7 @@ Consumidores finales acceden solo a datos de trazabilidad vía QR.
 ```mermaid
 flowchart LR
     %% Producción
-    subgraph Producción
+    subgraph "Producción"
         P1[Productor] 
         P1 -->|"1. mintAnimal con PRODUCER_ROLE"| NFT[AnimalNFTUpgradeable]
         P1 -->|"2. mintBatch / transferBatch con MINTER_ROLE"| ERC20[GanadoTokenUpgradeable]
@@ -82,24 +82,24 @@ flowchart LR
     end
 
     %% IoT y Sensores
-    subgraph IoT & Sensores
+    subgraph "IoT y Sensores"
         IoT[Caravanas Inteligentes / Sensores IoT] -->|"4. Datos en tiempo real: ubicación, temperatura, movimiento"| Backend
         IoT -->|"5. Alertas tempranas de enfermedades"| Backend
         IoT -->|"6. sincronización -> updateRegistry con IOT_ROLE"| Registry[GanadoRegistryUpgradeable]
     end
 
     %% Salud
-    subgraph Salud
+    subgraph "Salud"
         Vet[Veterinario] -->|"7. registrarVacuna / registrarTratamiento con VET_ROLE"| Backend
     end
 
     %% Procesamiento
-    subgraph Procesamiento
+    subgraph "Procesamiento"
         Frio[Frigorífico] -->|"8. registrarCorte / registrarQR con FRIGORIFICO_ROLE"| Backend
     end
 
     %% Auditoría
-    subgraph Auditoria
+    subgraph "Auditoría"
         Auditor[Auditor] -->|"9. consultarRegistros con AUDITOR_ROLE"| Registry
     end
 
@@ -109,7 +109,7 @@ flowchart LR
     NFT -->|"12. mintAnimal / transferAnimal -> updateRegistry usando DAO_ROLE / UPGRADER_ROLE"| Registry
 
     %% Pausa y Upgrade
-    subgraph Control
+    subgraph "Control"
         Admin[Admin / DAO_ROLE] 
         Admin -->|"13. pause / unpause con PAUSER_ROLE"| ERC20
         Admin -->|"14. pause / unpause con PAUSER_ROLE"| NFT
@@ -119,7 +119,7 @@ flowchart LR
     end
 
     %% Safe Multisig
-    subgraph SafeMultisig
+    subgraph "Safe Multisig"
         Safe[Safe Multisig]
         ERC20 -.->|"18. mintByDAO / transferBatch aprobadas"| Safe
         NFT -.->|"19. mintAnimal / transferAnimal aprobadas"| Safe
@@ -129,7 +129,7 @@ flowchart LR
     end
 
     %% Consumidor
-    subgraph Consumidor
+    subgraph "Consumidor"
         QR[QR Corte] -->|"23. consultaTrazabilidad"| Frontend[Frontend]
         Frontend -->|"24. solicita datos"| Registry
         Frontend -->|"25. solicita datos"| Backend
@@ -145,7 +145,9 @@ flowchart LR
     classDef admin fill:#fc9,stroke:#333,stroke-width:2px;
     classDef iot fill:#c9f,stroke:#333,stroke-width:2px;
 
-    class ERC20,NFT,Registry dao;
+    class ERC20 dao;
+    class NFT dao;
+    class Registry dao;
     class ERC20 minter;
     class P1 producer;
     class Vet vet;
