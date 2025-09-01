@@ -2,7 +2,10 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.urls import reverse
+from django.utils.html import format_html
 import re
+import json
 
 User = get_user_model()
 
@@ -96,9 +99,11 @@ class Animal(models.Model):
     
     def polyscan_link(self):
         if self.polyscan_url:
-            from django.utils.html import format_html
             return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', self.polyscan_url)
         return "No disponible"
+    
+    def get_absolute_url(self):
+        return reverse('admin:cattle_animal_change', args=[self.id])
 
 class AnimalHealthRecord(models.Model):
     RECORD_SOURCE = [
@@ -112,12 +117,14 @@ class AnimalHealthRecord(models.Model):
     health_status = models.CharField(max_length=20, choices=HealthStatus.choices)
     source = models.CharField(max_length=20, choices=RECORD_SOURCE, default='VETERINARIAN')
     veterinarian = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    iot_device = models.ForeignKey('iot.IoTDevice', on_delete=models.SET_NULL, null=True, blank=True)
+    iot_device_id = models.CharField(max_length=100, blank=True, verbose_name="ID Dispositivo IoT")
     notes = models.TextField(blank=True)
-    temperature = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
-    heart_rate = models.IntegerField(null=True, blank=True)
-    ipfs_hash = models.CharField(max_length=100, blank=True)
-    transaction_hash = models.CharField(max_length=66, blank=True)
+    temperature = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name="Temperatura (°C)")
+    heart_rate = models.IntegerField(null=True, blank=True, verbose_name="Ritmo Cardíaco (bpm)")
+    movement_activity = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name="Actividad de Movimiento")
+    ipfs_hash = models.CharField(max_length=100, blank=True, verbose_name="Hash IPFS")
+    transaction_hash = models.CharField(max_length=66, blank=True, verbose_name="Hash de Transacción")
+    blockchain_hash = models.CharField(max_length=66, blank=True, null=True, verbose_name="Hash Blockchain")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -127,10 +134,49 @@ class AnimalHealthRecord(models.Model):
         indexes = [
             models.Index(fields=['animal', 'created_at']),
             models.Index(fields=['health_status']),
+            models.Index(fields=['iot_device_id']),
         ]
 
     def __str__(self):
         return f"{self.animal.ear_tag} - {self.get_health_status_display()} - {self.created_at}"
+    
+    def clean(self):
+        super().clean()
+        # Validar formato de hash de transacción
+        if self.transaction_hash and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.transaction_hash):
+            raise ValidationError({
+                'transaction_hash': 'Formato de hash de transacción inválido.'
+            })
+        if self.blockchain_hash and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.blockchain_hash):
+            raise ValidationError({
+                'blockchain_hash': 'Formato de hash blockchain inválido.'
+            })
+    
+    def save(self, *args, **kwargs):
+        # Normalizar hashes antes de guardar
+        if self.transaction_hash and not self.transaction_hash.startswith('0x'):
+            self.transaction_hash = '0x' + self.transaction_hash
+        if self.blockchain_hash and not self.blockchain_hash.startswith('0x'):
+            self.blockchain_hash = '0x' + self.blockchain_hash
+        super().save(*args, **kwargs)
+    
+    @property
+    def blockchain_linked(self):
+        return bool(self.blockchain_hash)
+    
+    @property
+    def polyscan_url(self):
+        if self.transaction_hash:
+            tx_hash = self.transaction_hash
+            if not tx_hash.startswith('0x'):
+                tx_hash = '0x' + tx_hash
+            return f"https://amoy.polygonscan.com/tx/{tx_hash}"
+        return None
+    
+    def polyscan_link(self):
+        if self.polyscan_url:
+            return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', self.polyscan_url)
+        return "No disponible"
 
 class Batch(models.Model):
     BATCH_STATUS_CHOICES = [
@@ -193,3 +239,67 @@ class Batch(models.Model):
         if self.blockchain_tx and not self.blockchain_tx.startswith('0x'):
             self.blockchain_tx = '0x' + self.blockchain_tx
         super().save(*args, **kwargs)
+    
+    @property
+    def polyscan_url(self):
+        if self.blockchain_tx:
+            tx_hash = self.blockchain_tx
+            if not tx_hash.startswith('0x'):
+                tx_hash = '0x' + tx_hash
+            return f"https://amoy.polygonscan.com/tx/{tx_hash}"
+        return None
+    
+    def polyscan_link(self):
+        if self.polyscan_url:
+            return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', self.polyscan_url)
+        return "No disponible"
+    
+    def get_absolute_url(self):
+        return reverse('admin:cattle_batch_change', args=[self.id])
+
+# Modelo para eventos IoT (si no existe una app IoT separada)
+# class IoTDevice(models.Model):
+#     DEVICE_TYPES = [
+#         ('TEMPERATURE', 'Sensor de Temperatura'),
+#         ('HEART_RATE', 'Sensor de Ritmo Cardíaco'),
+#         ('MOVEMENT', 'Sensor de Movimiento'),
+#         ('GPS', 'Sensor de Ubicación'),
+#         ('MULTI', 'Sensor Multifunción'),
+#     ]
+    
+#     DEVICE_STATUS = [
+#         ('ACTIVE', 'Activo'),
+#         ('INACTIVE', 'Inactivo'),
+#         ('MAINTENANCE', 'En Mantenimiento'),
+#         ('DISCONNECTED', 'Desconectado'),
+#     ]
+    
+#     device_id = models.CharField(max_length=100, unique=True, verbose_name="ID del Dispositivo")
+#     device_type = models.CharField(max_length=20, choices=DEVICE_TYPES, verbose_name="Tipo de Dispositivo")
+#     status = models.CharField(max_length=20, choices=DEVICE_STATUS, default='ACTIVE', verbose_name="Estado")
+#     animal = models.ForeignKey(Animal, on_delete=models.SET_NULL, null=True, blank=True, related_name='iot_devices', verbose_name="Animal Asociado")
+#     last_reading = models.DateTimeField(null=True, blank=True, verbose_name="Última Lectura")
+#     battery_level = models.IntegerField(null=True, blank=True, verbose_name="Nivel de Batería (%)")
+#     location = models.CharField(max_length=255, blank=True, verbose_name="Ubicación")
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+
+#     class Meta:
+#         verbose_name = "Dispositivo IoT"
+#         verbose_name_plural = "Dispositivos IoT"
+#         indexes = [
+#             models.Index(fields=['device_id']),
+#             models.Index(fields=['device_type']),
+#             models.Index(fields=['animal']),
+#             models.Index(fields=['status']),
+#         ]
+
+#     def __str__(self):
+#         return f"{self.device_id} - {self.get_device_type_display()}"
+    
+#     @property
+#     def is_active(self):
+#         return self.status == 'ACTIVE'
+    
+#     def get_absolute_url(self):
+#         return reverse('admin:cattle_iotdevice_change', args=[self.id])

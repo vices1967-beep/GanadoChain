@@ -1,25 +1,67 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from .models import UserActivityLog, UserPreference, APIToken
+import re
 
 User = get_user_model()
+
+class EthereumAddressField(serializers.CharField):
+    """Campo personalizado para validar direcciones Ethereum"""
+    def __init__(self, **kwargs):
+        kwargs['max_length'] = 42
+        super().__init__(**kwargs)
+    
+    def to_internal_value(self, data):
+        data = super().to_internal_value(data)
+        # Normalizar a minúsculas y asegurar prefijo 0x
+        if data and not data.startswith('0x'):
+            data = '0x' + data
+        return data.lower()
+    
+    def validate(self, value):
+        if value and not re.match(r'^0x[0-9a-f]{40}$', value):
+            raise serializers.ValidationError('Dirección Ethereum inválida')
+        return value
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
+    wallet_address = EthereumAddressField(required=True)
 
     class Meta:
         model = User
-        fields = ('email', 'username', 'password', 'password2', 'first_name', 'last_name', 'wallet_address', 'role')
+        fields = (
+            'email', 'username', 'password', 'password2', 
+            'first_name', 'last_name', 'wallet_address', 'role',
+            'phone_number', 'company', 'location'
+        )
         extra_kwargs = {
             'first_name': {'required': True},
             'last_name': {'required': True},
+            'email': {'required': True},
             'wallet_address': {'required': True}
         }
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError({"password": "Password fields didn't match."})
+            raise serializers.ValidationError({"password": "Las contraseñas no coinciden."})
+        
+        # Validar que el wallet address sea único
+        wallet_address = attrs['wallet_address']
+        if User.objects.filter(wallet_address=wallet_address).exists():
+            raise serializers.ValidationError({"wallet_address": "Esta dirección wallet ya está registrada."})
+        
+        # Validar que el email sea único
+        email = attrs.get('email')
+        if email and User.objects.filter(email=email).exists():
+            raise serializers.ValidationError({"email": "Este correo electrónico ya está registrado."})
+        
+        # Validar que el username sea único
+        username = attrs.get('username')
+        if username and User.objects.filter(username=username).exists():
+            raise serializers.ValidationError({"username": "Este nombre de usuario ya está en uso."})
+        
         return attrs
 
     def create(self, validated_data):
@@ -28,10 +70,190 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user = User.objects.create(**validated_data)
         user.set_password(password)
         user.save()
+        
+        # Crear preferencias por defecto
+        UserPreference.objects.create(user=user)
+        
         return user
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    profile_completion = serializers.IntegerField(read_only=True)
+    wallet_short = serializers.CharField(read_only=True)
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    has_blockchain_roles = serializers.BooleanField(read_only=True)
+    primary_blockchain_role = serializers.CharField(read_only=True)
+    
     class Meta:
         model = User
-        fields = ('id', 'email', 'username', 'first_name', 'last_name', 'wallet_address', 'role', 'is_verified', 'date_joined')
-        read_only_fields = ('id', 'email', 'date_joined', 'is_verified')
+        fields = (
+            'id', 'email', 'username', 'first_name', 'last_name', 
+            'wallet_address', 'wallet_short', 'role', 'role_display',
+            'is_verified', 'is_blockchain_active', 'verification_date',
+            'profile_image', 'phone_number', 'company', 'location',
+            'bio', 'website', 'twitter_handle', 'discord_handle',
+            'blockchain_roles', 'has_blockchain_roles', 'primary_blockchain_role',
+            'last_blockchain_sync', 'profile_completion',
+            'date_joined', 'last_login'
+        )
+        read_only_fields = (
+            'id', 'email', 'date_joined', 'last_login', 'is_verified',
+            'verification_date', 'last_blockchain_sync', 'profile_completion',
+            'wallet_short', 'role_display', 'has_blockchain_roles', 
+            'primary_blockchain_role'
+        )
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = (
+            'first_name', 'last_name', 'profile_image',
+            'phone_number', 'company', 'location', 'bio',
+            'website', 'twitter_handle', 'discord_handle'
+        )
+
+class UserListSerializer(serializers.ModelSerializer):
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    wallet_short = serializers.CharField(read_only=True)
+    
+    class Meta:
+        model = User
+        fields = (
+            'id', 'username', 'first_name', 'last_name', 'email',
+            'wallet_address', 'wallet_short', 'role', 'role_display',
+            'is_verified', 'company', 'date_joined'
+        )
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, validators=[validate_password])
+    new_password2 = serializers.CharField(required=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password2']:
+            raise serializers.ValidationError({"new_password": "Las contraseñas no coinciden."})
+        return attrs
+
+class WalletConnectSerializer(serializers.Serializer):
+    wallet_address = EthereumAddressField(required=True)
+    signature = serializers.CharField(required=True)
+    message = serializers.CharField(required=True)
+
+    def validate(self, attrs):
+        # Aquí se implementaría la verificación de la firma
+        wallet_address = attrs['wallet_address']
+        signature = attrs['signature']
+        message = attrs['message']
+        
+        # TODO: Implementar verificación de firma con web3
+        # Por ahora solo validamos el formato
+        if not signature.startswith('0x') or len(signature) != 132:
+            raise serializers.ValidationError({"signature": "Formato de firma inválido."})
+        
+        return attrs
+
+class BlockchainRoleSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=User.BLOCKCHAIN_ROLE_CHOICES)
+    action = serializers.ChoiceField(choices=[('add', 'add'), ('remove', 'remove')])
+
+class UserActivityLogSerializer(serializers.ModelSerializer):
+    action_display = serializers.CharField(source='get_action_display', read_only=True)
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    short_tx_hash = serializers.CharField(read_only=True)
+    
+    class Meta:
+        model = UserActivityLog
+        fields = (
+            'id', 'user', 'user_username', 'action', 'action_display',
+            'ip_address', 'user_agent', 'metadata', 'timestamp',
+            'blockchain_tx_hash', 'short_tx_hash'
+        )
+        read_only_fields = ('id', 'timestamp', 'short_tx_hash')
+
+class UserPreferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserPreference
+        fields = (
+            'email_notifications', 'push_notifications', 'language',
+            'theme', 'animals_per_page', 'enable_animations'
+        )
+
+class APITokenSerializer(serializers.ModelSerializer):
+    token_type_display = serializers.CharField(source='get_token_type_display', read_only=True)
+    is_expired = serializers.BooleanField(read_only=True)
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    
+    class Meta:
+        model = APIToken
+        fields = (
+            'id', 'user', 'user_username', 'name', 'token', 'token_type',
+            'token_type_display', 'is_active', 'expires_at', 'last_used',
+            'is_expired', 'created_at'
+        )
+        read_only_fields = ('id', 'token', 'created_at', 'is_expired', 'user_username')
+        extra_kwargs = {
+            'token': {'write_only': True}
+        }
+
+class APITokenCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = APIToken
+        fields = ('name', 'token_type', 'expires_at')
+        read_only_fields = ('token',)
+
+class UserStatsSerializer(serializers.Serializer):
+    total_users = serializers.IntegerField()
+    active_users = serializers.IntegerField()
+    verified_users = serializers.IntegerField()
+    users_by_role = serializers.DictField()
+    new_users_today = serializers.IntegerField()
+    new_users_this_week = serializers.IntegerField()
+    users_with_blockchain_roles = serializers.IntegerField()
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    token = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, validators=[validate_password])
+    new_password2 = serializers.CharField(required=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password2']:
+            raise serializers.ValidationError({"new_password": "Las contraseñas no coinciden."})
+        return attrs
+
+class UserSearchSerializer(serializers.Serializer):
+    query = serializers.CharField(required=True, max_length=100)
+    search_in = serializers.MultipleChoiceField(
+        choices=[
+            ('username', 'Username'),
+            ('email', 'Email'),
+            ('wallet', 'Wallet Address'),
+            ('name', 'Nombre'),
+            ('company', 'Empresa')
+        ],
+        required=False,
+        default=['username', 'email', 'wallet', 'name']
+    )
+
+class UserRoleUpdateSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=User.ROLE_CHOICES)
+    wallet_address = EthereumAddressField(required=True)
+
+class VerifyWalletSerializer(serializers.Serializer):
+    wallet_address = EthereumAddressField(required=True)
+    signed_message = serializers.CharField(required=True)
+    original_message = serializers.CharField(required=True)
+
+class UserExportSerializer(serializers.ModelSerializer):
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    blockchain_roles_count = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = User
+        fields = (
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'wallet_address', 'role', 'role_display', 'is_verified',
+            'company', 'location', 'date_joined', 'last_login',
+            'blockchain_roles_count'
+        )

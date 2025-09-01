@@ -1,7 +1,9 @@
-# blockchain/models.py
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.utils.html import format_html
+from django.urls import reverse
 import re
+import json
 
 class BlockchainEvent(models.Model):
     EVENT_TYPES = [
@@ -84,6 +86,23 @@ class BlockchainEvent(models.Model):
         if self.transaction_hash:
             return f"{self.transaction_hash[:8]}...{self.transaction_hash[-6:]}"
         return "N/A"
+    
+    @property
+    def metadata_prettified(self):
+        """Metadata formateada para visualización"""
+        return json.dumps(self.metadata, indent=2, ensure_ascii=False)
+    
+    def animal_link(self):
+        if self.animal:
+            url = reverse('admin:cattle_animal_change', args=[self.animal.id])
+            return format_html('<a href="{}">{}</a>', url, self.animal.ear_tag)
+        return "—"
+    
+    def batch_link(self):
+        if self.batch:
+            url = reverse('admin:cattle_batch_change', args=[self.batch.id])
+            return format_html('<a href="{}">{}</a>', url, self.batch.name)
+        return "—"
 
 class ContractInteraction(models.Model):
     """Registro de interacciones con contratos inteligentes"""
@@ -91,6 +110,7 @@ class ContractInteraction(models.Model):
         ('NFT', 'Animal NFT'),
         ('TOKEN', 'Ganado Token'),
         ('REGISTRY', 'Registry'),
+        ('IOT', 'IoT Manager'),
     ]
     
     ACTION_TYPES = [
@@ -100,6 +120,9 @@ class ContractInteraction(models.Model):
         ('UPDATE', 'Update'),
         ('ROLE_GRANT', 'Grant Role'),
         ('ROLE_REVOKE', 'Revoke Role'),
+        ('APPROVE', 'Approve'),
+        ('BATCH_MINT', 'Batch Mint'),
+        ('HEALTH_UPDATE', 'Update Health'),
     ]
     
     contract_type = models.CharField(max_length=10, choices=CONTRACT_TYPES)
@@ -169,6 +192,30 @@ class ContractInteraction(models.Model):
         if self.gas_used and self.gas_price:
             return (self.gas_used * self.gas_price) / 10**18
         return None
+    
+    @property
+    def gas_cost_usd(self):
+        """Costo de gas en USD (estimado)"""
+        eth_price = 3000  # Precio estimado de ETH en USD
+        gas_cost = self.gas_cost_eth
+        if gas_cost:
+            return gas_cost * eth_price
+        return None
+    
+    @property
+    def parameters_prettified(self):
+        """Parámetros formateados para visualización"""
+        return json.dumps(self.parameters, indent=2, ensure_ascii=False)
+    
+    @property
+    def status_display(self):
+        """Estado con colores"""
+        if self.status == 'SUCCESS':
+            return format_html('<span style="color: green;">✅ {}</span>', self.get_status_display())
+        elif self.status == 'FAILED':
+            return format_html('<span style="color: red;">❌ {}</span>', self.get_status_display())
+        else:
+            return format_html('<span style="color: orange;">⏳ {}</span>', self.get_status_display())
 
 class NetworkState(models.Model):
     """Estado de la red blockchain"""
@@ -179,13 +226,42 @@ class NetworkState(models.Model):
     chain_id = models.IntegerField(default=80002)  # Polygon Amoy
     sync_enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Información adicional de la red
+    network_name = models.CharField(max_length=50, default='Polygon Amoy')
+    rpc_url = models.CharField(max_length=255, default='https://polygon-amoy.infura.io/v3/')
+    block_time = models.FloatField(default=2.1)  # Tiempo promedio entre bloques en segundos
+    native_currency = models.CharField(max_length=20, default='MATIC')
+    is_testnet = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "Estado de Red"
         verbose_name_plural = "Estados de Red"
 
     def __str__(self):
-        return f"Block #{self.last_block_number} - Chain ID: {self.chain_id}"
+        return f"Block #{self.last_block_number} - {self.network_name}"
+
+    @property
+    def average_gas_price_gwei(self):
+        """Precio promedio de gas en Gwei"""
+        return self.average_gas_price / 10**9 if self.average_gas_price else 0
+    
+    @property
+    def sync_status(self):
+        """Estado de sincronización"""
+        if self.sync_enabled:
+            return format_html('<span style="color: green;">✅ Sincronizando</span>')
+        else:
+            return format_html('<span style="color: red;">❌ Detenido</span>')
+    
+    @property
+    def last_sync_ago(self):
+        """Tiempo desde la última sincronización"""
+        from django.utils import timezone
+        from django.utils.timesince import timesince
+        if self.last_sync_time:
+            return timesince(self.last_sync_time, timezone.now())
+        return "Nunca"
 
 class SmartContract(models.Model):
     """Registro de contratos inteligentes desplegados"""
@@ -194,6 +270,7 @@ class SmartContract(models.Model):
         ('TOKEN', 'Ganado Token'),
         ('REGISTRY', 'Registry'),
         ('IOT', 'IoT Manager'),
+        ('BATCH', 'Batch Manager'),
     ]
     
     name = models.CharField(max_length=100)
@@ -207,6 +284,12 @@ class SmartContract(models.Model):
     deployer_address = models.CharField(max_length=42)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # Información adicional
+    implementation_address = models.CharField(max_length=42, blank=True)
+    proxy_address = models.CharField(max_length=42, blank=True)
+    is_upgradeable = models.BooleanField(default=False)
+    admin_address = models.CharField(max_length=42, blank=True)
 
     class Meta:
         verbose_name = "Contrato Inteligente"
@@ -228,15 +311,25 @@ class SmartContract(models.Model):
             raise ValidationError({'deployment_tx_hash': 'Hash de deployment inválido'})
         if self.deployer_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.deployer_address):
             raise ValidationError({'deployer_address': 'Dirección de deployer inválida'})
+        if self.implementation_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.implementation_address):
+            raise ValidationError({'implementation_address': 'Dirección de implementación inválida'})
+        if self.proxy_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.proxy_address):
+            raise ValidationError({'proxy_address': 'Dirección de proxy inválida'})
+        if self.admin_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.admin_address):
+            raise ValidationError({'admin_address': 'Dirección de admin inválida'})
 
     def save(self, *args, **kwargs):
         # Normalizar addresses
-        if self.address and not self.address.startswith('0x'):
-            self.address = '0x' + self.address
-        if self.deployment_tx_hash and not self.deployment_tx_hash.startswith('0x'):
-            self.deployment_tx_hash = '0x' + self.deployment_tx_hash
-        if self.deployer_address and not self.deployer_address.startswith('0x'):
-            self.deployer_address = '0x' + self.deployer_address
+        addresses_to_normalize = [
+            'address', 'deployment_tx_hash', 'deployer_address', 
+            'implementation_address', 'proxy_address', 'admin_address'
+        ]
+        
+        for field in addresses_to_normalize:
+            value = getattr(self, field)
+            if value and not value.startswith('0x'):
+                setattr(self, field, '0x' + value)
+                
         super().save(*args, **kwargs)
 
     @property
@@ -253,4 +346,88 @@ class SmartContract(models.Model):
     def deployment_polyscan_url(self):
         if self.deployment_tx_hash:
             return f"https://amoy.polygonscan.com/tx/{self.deployment_tx_hash}"
+        return None
+    
+    @property
+    def abi_prettified(self):
+        """ABI formateada para visualización"""
+        return json.dumps(self.abi, indent=2, ensure_ascii=False)
+    
+    @property
+    def is_upgradeable_display(self):
+        """Indicador visual de si es upgradeable"""
+        if self.is_upgradeable:
+            return format_html('<span style="color: green;">✅ Sí</span>')
+        return format_html('<span style="color: red;">❌ No</span>')
+    
+    @property
+    def is_active_display(self):
+        """Indicador visual de estado activo"""
+        if self.is_active:
+            return format_html('<span style="color: green;">✅ Activo</span>')
+        return format_html('<span style="color: red;">❌ Inactivo</span>')
+
+class GasPriceHistory(models.Model):
+    """Historial de precios de gas"""
+    gas_price = models.BigIntegerField()
+    gas_price_gwei = models.FloatField()
+    block_number = models.BigIntegerField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Historial de Gas"
+        verbose_name_plural = "Historial de Gas"
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['timestamp']),
+            models.Index(fields=['block_number']),
+        ]
+
+    def __str__(self):
+        return f"{self.gas_price_gwei} Gwei - Block #{self.block_number}"
+
+class TransactionPool(models.Model):
+    """Pool de transacciones pendientes"""
+    transaction_hash = models.CharField(max_length=66, unique=True)
+    raw_transaction = models.TextField()
+    status = models.CharField(max_length=10, choices=[
+        ('PENDING', 'Pending'),
+        ('PROCESSING', 'Processing'),
+        ('CONFIRMED', 'Confirmed'),
+        ('FAILED', 'Failed')
+    ], default='PENDING')
+    retry_count = models.IntegerField(default=0)
+    last_retry = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Transacción Pendiente"
+        verbose_name_plural = "Transacciones Pendientes"
+        indexes = [
+            models.Index(fields=['transaction_hash']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"{self.transaction_hash[:10]}... - {self.get_status_display()}"
+
+    def clean(self):
+        super().clean()
+        if self.transaction_hash and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.transaction_hash):
+            raise ValidationError({'transaction_hash': 'Hash de transacción inválido'})
+
+    def save(self, *args, **kwargs):
+        if self.transaction_hash and not self.transaction_hash.startswith('0x'):
+            self.transaction_hash = '0x' + self.transaction_hash
+        super().save(*args, **kwargs)
+    
+    @property
+    def short_hash(self):
+        return f"{self.transaction_hash[:8]}...{self.transaction_hash[-6:]}" if self.transaction_hash else "N/A"
+    
+    @property
+    def polyscan_url(self):
+        if self.transaction_hash:
+            return f"https://amoy.polygonscan.com/tx/{self.transaction_hash}"
         return None
