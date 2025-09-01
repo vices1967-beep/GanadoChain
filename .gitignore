@@ -1,4 +1,112 @@
 # =========================
+# Django
+# =========================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Django specific
+*.sqlite3
+*.sqlite
+db.sqlite3
+db.sqlite
+
+# Django migrations (puedes comentar esto si quieres versionar las migraciones)
+# */migrations/*.py
+# !*/migrations/__init__.py
+
+# Media files
+media/
+uploads/
+
+# Static files (generalmente se recolectan durante el despliegue)
+staticfiles/
+*.css.map
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# =========================
+# Python
+# =========================
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# =========================
 # Node.js dependencies
 # =========================
 node_modules/
@@ -19,7 +127,6 @@ frontend/*.log
 # =========================
 # Environment files
 # =========================
-.env
 .env.local
 .env.*.local
 
@@ -48,7 +155,7 @@ test/snapshots/
 # Deployed addresses
 # =========================
 deployed_addresses.json
-
+deployed-new.json
 # =========================
 # IPFS / temporary hashes
 # =========================
@@ -85,6 +192,12 @@ frontend/.cache/
 # =========================
 *.pid
 *.seed
-*.bak
 *.old
 *.backup
+
+# =========================
+# Database
+# =========================
+# Ficheros de base de datos (excepto si quieres versionar un SQLite de desarrollo)
+*.db
+*.db-journal
