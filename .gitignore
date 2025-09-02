@@ -157,6 +157,10 @@ test/snapshots/
 deployed_addresses.json
 deployed-new.json
 # =========================
+# Backup Base de datos
+# =========================
+clean_backup.json
+# =========================
 # IPFS / temporary hashes
 # =========================
 backend/tmp/
