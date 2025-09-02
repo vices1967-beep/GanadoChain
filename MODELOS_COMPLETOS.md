@@ -116,63 +116,63 @@ Consulta datos tanto en el Registry (on-chain) como en el Backend (off-chain).
 
 ```mermaid
 erDiagram
-    %% ======================================================
+    %% ================================
     %% USERS (users/models.py)
-    %% ======================================================
+    %% ================================
     USER {
-        bigint id PK
-        string username UK
-        string email UK
+        bigint id
+        string username
+        string email
         string password
         boolean is_active
         datetime date_joined
     }
 
-    USERACTIVITYLOG {
-        bigint id PK
-        bigint user_id FK
+    USER_ACTIVITY_LOG {
+        bigint id
+        bigint user_id
         string action
         text details
         string ip_address
         datetime timestamp
     }
 
-    USERPREFERENCE {
-        bigint id PK
-        bigint user_id FK
+    USER_PREFERENCE {
+        bigint id
+        bigint user_id
         boolean email_notifications
         boolean push_notifications
         string language
     }
 
-    APITOKEN {
-        bigint id PK
-        bigint user_id FK
+    API_TOKEN {
+        bigint id
+        bigint user_id
         string name
-        string key UK
+        string key
         datetime created_at
         datetime expires_at
         boolean is_active
     }
 
-    %% ======================================================
-    %% USERS/REPUTATION (users/reputation_models.py)
-    %% ======================================================
-    USERROLE {
-        bigint id PK
-        bigint user_id FK
+    %% ================================
+    %% USERS/REPUTATION
+    %% ================================
+    USER_ROLE {
+        bigint id
+        bigint user_id
         string role_type
         string scope_type
         string scope_id
-        bigint granted_by FK
+        bigint granted_by
         datetime granted_at
         datetime expires_at
         boolean is_active
     }
 
-    REPUTATIONSCORE {
-        bigint id PK
-        bigint user_id FK
+    REPUTATION_SCORE {
+        bigint id
+        bigint user_id
         string reputation_type
         decimal score
         int total_actions
@@ -181,12 +181,12 @@ erDiagram
         json metrics
     }
 
-    %% ======================================================
-    %% USERS/NOTIFICATIONS (users/notification_models.py)
-    %% ======================================================
+    %% ================================
+    %% USERS/NOTIFICATIONS
+    %% ================================
     NOTIFICATION {
-        bigint id PK
-        bigint user_id FK
+        bigint id
+        bigint user_id
         string notification_type
         string title
         text message
@@ -197,12 +197,12 @@ erDiagram
         datetime created_at
     }
 
-    %% ======================================================
+    %% ================================
     %% CATTLE (cattle/models.py)
-    %% ======================================================
+    %% ================================
     ANIMAL {
-        bigint id PK
-        string ear_tag UK
+        bigint id
+        string ear_tag
         string breed
         date birth_date
         string sex
@@ -211,9 +211,9 @@ erDiagram
         datetime updated_at
     }
 
-    ANIMALHEALTHRECORD {
-        bigint id PK
-        bigint animal_id FK
+    ANIMAL_HEALTH_RECORD {
+        bigint id
+        bigint animal_id
         string health_status
         string treatment
         string veterinarian
@@ -221,18 +221,18 @@ erDiagram
     }
 
     BATCH {
-        bigint id PK
+        bigint id
         string name
         string description
         datetime created_at
     }
 
-    %% ======================================================
-    %% CATTLE/BLOCKCHAIN (cattle/blockchain_models.py)
-    %% ======================================================
-    BLOCKCHAINEVENTSTATE {
-        bigint id PK
-        bigint event_id FK UK
+    %% ================================
+    %% CATTLE/BLOCKCHAIN
+    %% ================================
+    BLOCKCHAIN_EVENT_STATE {
+        bigint id
+        bigint event_id
         string state
         int confirmation_blocks
         bigint block_confirmed
@@ -240,15 +240,15 @@ erDiagram
         datetime updated_at
     }
 
-    %% ======================================================
-    %% CATTLE/AUDIT (cattle/audit_models.py)
-    %% ======================================================
-    CATTLEAUDITTRAIL {
-        bigint id PK
+    %% ================================
+    %% CATTLE/AUDIT
+    %% ================================
+    CATTLE_AUDIT_TRAIL {
+        bigint id
         string object_type
         string object_id
         string action_type
-        bigint user_id FK
+        bigint user_id
         json previous_state
         json new_state
         json changes
@@ -257,57 +257,57 @@ erDiagram
         datetime timestamp
     }
 
-    %% ======================================================
+    %% ================================
     %% IOT (iot/models.py)
-    %% ======================================================
-    IOTDEVICE {
-        bigint id PK
-        string device_id UK
+    %% ================================
+    IOT_DEVICE {
+        bigint id
+        string device_id
         string device_type
         string status
         datetime registered_at
     }
 
-    GPSDATA {
-        bigint id PK
-        bigint device_id FK
+    GPS_DATA {
+        bigint id
+        bigint device_id
         float latitude
         float longitude
         datetime timestamp
     }
 
-    HEALTHSENSORDATA {
-        bigint id PK
-        bigint device_id FK
+    HEALTH_SENSOR_DATA {
+        bigint id
+        bigint device_id
         float temperature
         float heart_rate
         float movement
         datetime timestamp
     }
 
-    DEVICEEVENT {
-        bigint id PK
-        bigint device_id FK
+    DEVICE_EVENT {
+        bigint id
+        bigint device_id
         string event_type
         json payload
         datetime timestamp
     }
 
-    DEVICECONFIGURATION {
-        bigint id PK
-        bigint device_id FK UK
+    DEVICE_CONFIGURATION {
+        bigint id
+        bigint device_id
         int sampling_interval
         int transmission_power
         float battery_threshold
         datetime updated_at
     }
 
-    %% ======================================================
-    %% IOT/ANALYTICS (iot/analytics_models.py)
-    %% ======================================================
-    DEVICEANALYTICS {
-        bigint id PK
-        bigint device_id FK
+    %% ================================
+    %% IOT/ANALYTICS
+    %% ================================
+    DEVICE_ANALYTICS {
+        bigint id
+        bigint device_id
         date date
         int total_readings
         float avg_battery_level
@@ -317,58 +317,58 @@ erDiagram
         datetime created_at
     }
 
-    %% ======================================================
+    %% ================================
     %% BLOCKCHAIN (blockchain/models.py)
-    %% ======================================================
-    BLOCKCHAINEVENT {
-        bigint id PK
+    %% ================================
+    BLOCKCHAIN_EVENT {
+        bigint id
         string event_type
         string transaction_hash
         datetime block_timestamp
     }
 
-    CONTRACTINTERACTION {
-        bigint id PK
+    CONTRACT_INTERACTION {
+        bigint id
         string contract_type
         string method
         json parameters
         datetime called_at
     }
 
-    NETWORKSTATE {
-        bigint id PK
+    NETWORK_STATE {
+        bigint id
         string network_name
         int chain_id
         boolean is_active
         datetime updated_at
     }
 
-    SMARTCONTRACT {
-        bigint id PK
+    SMART_CONTRACT {
+        bigint id
         string name
         string address
         string version
     }
 
-    GASPRICEHISTORY {
-        bigint id PK
+    GAS_PRICE_HISTORY {
+        bigint id
         int gas_price
         datetime timestamp
     }
 
-    TRANSACTIONPOOL {
-        bigint id PK
-        string transaction_hash UK
+    TRANSACTION_POOL {
+        bigint id
+        string transaction_hash
         string status
         datetime created_at
     }
 
-    %% ======================================================
-    %% CORE/METRICS (core/metrics_models.py)
-    %% ======================================================
-    SYSTEMMETRICS {
-        bigint id PK
-        date date UK
+    %% ================================
+    %% CORE/METRICS
+    %% ================================
+    SYSTEM_METRICS {
+        bigint id
+        date date
         int total_animals
         int total_users
         int total_transactions
@@ -386,100 +386,148 @@ erDiagram
         datetime created_at
     }
 
-    %% ======================================================
+    %% ================================
     %% RELACIONES
-    %% ======================================================
-    USER ||--o{ USERACTIVITYLOG : performs
-    USER ||--|| USERPREFERENCE : has
-    USER ||--o{ APITOKEN : has
-    USER ||--o{ USERROLE : has_roles
-    USER ||--o{ REPUTATIONSCORE : reputation
+    %% ================================
+    USER ||--o{ USER_ACTIVITY_LOG : performs
+    USER ||--|| USER_PREFERENCE : has
+    USER ||--o{ API_TOKEN : has
+    USER ||--o{ USER_ROLE : has_roles
+    USER ||--o{ REPUTATION_SCORE : reputation
     USER ||--o{ NOTIFICATION : notified
-    USER ||--o{ CATTLEAUDITTRAIL : actions
+    USER ||--o{ CATTLE_AUDIT_TRAIL : actions
 
-    ANIMAL ||--o{ ANIMALHEALTHRECORD : health
+    ANIMAL ||--o{ ANIMAL_HEALTH_RECORD : health
     ANIMAL }o--o{ BATCH : grouped
-    ANIMAL ||--o{ IOTDEVICE : monitored
+    ANIMAL ||--o{ IOT_DEVICE : monitored
 
-    IOTDEVICE ||--o{ GPSDATA : generates
-    IOTDEVICE ||--o{ HEALTHSENSORDATA : generates
-    IOTDEVICE ||--o{ DEVICEEVENT : events
-    IOTDEVICE ||--|| DEVICECONFIGURATION : configured
-    IOTDEVICE ||--o{ DEVICEANALYTICS : metrics
+    IOT_DEVICE ||--o{ GPS_DATA : generates
+    IOT_DEVICE ||--o{ HEALTH_SENSOR_DATA : generates
+    IOT_DEVICE ||--o{ DEVICE_EVENT : events
+    IOT_DEVICE ||--|| DEVICE_CONFIGURATION : configured
+    IOT_DEVICE ||--o{ DEVICE_ANALYTICS : metrics
 
-    BLOCKCHAINEVENT ||--|| BLOCKCHAINEVENTSTATE : state
-    CONTRACTINTERACTION }|--|| SMARTCONTRACT : interacts
+    BLOCKCHAIN_EVENT ||--|| BLOCKCHAIN_EVENT_STATE : state
+    CONTRACT_INTERACTION }|--|| SMART_CONTRACT : interacts
 
-    %% ======================================================
-    %% ESTILOS POR ARCHIVO
-    %% ======================================================
-    classDef users fill:#cce5ff,stroke:#004085,stroke-width:2px;
-    classDef reputation fill:#b3e6cc,stroke:#006644,stroke-width:2px;
-    classDef notifications fill:#ffe6cc,stroke:#b36b00,stroke-width:2px;
-    classDef cattle fill:#e6ffe6,stroke:#267326,stroke-width:2px;
-    classDef cattle_blockchain fill:#ffd6cc,stroke:#b32400,stroke-width:2px;
-    classDef cattle_audit fill:#f2ccff,stroke:#7300b3,stroke-width:2px;
-    classDef iot fill:#ffffcc,stroke:#999900,stroke-width:2px;
-    classDef iot_analytics fill:#d9f2ff,stroke:#005580,stroke-width:2px;
-    classDef blockchain fill:#ffcccc,stroke:#990000,stroke-width:2px;
-    classDef core fill:#e2e3e5,stroke:#383d41,stroke-width:2px;
 
-    class USER,USERACTIVITYLOG,USERPREFERENCE,APITOKEN users;
-    class USERROLE,REPUTATIONSCORE reputation;
-    class NOTIFICATION notifications;
-    class ANIMAL,ANIMALHEALTHRECORD,BATCH cattle;
-    class BLOCKCHAINEVENTSTATE cattle_blockchain;
-    class CATTLEAUDITTRAIL cattle_audit;
-    class IOTDEVICE,GPSDATA,HEALTHSENSORDATA,DEVICEEVENT,DEVICECONFIGURATION iot;
-    class DEVICEANALYTICS iot_analytics;
-    class BLOCKCHAINEVENT,CONTRACTINTERACTION,NETWORKSTATE,SMARTCONTRACT,GASPRICEHISTORY,TRANSACTIONPOOL blockchain;
-    class SYSTEMMETRICS core;
 
+```
+1. Diagrama Completo (con marcos de clases y sin errores de ciclo)
+```mermaid
+flowchart LR
+    %% Producción
+    subgraph Producción
+        P1[Productor] 
+        P1 -->|"1. mintAnimal con PRODUCER_ROLE"| NFT[AnimalNFTUpgradeable]
+        P1 -->|"2. mintBatch / transferBatch con MINTER_ROLE"| ERC20[GanadoTokenUpgradeable]
+        P1 -->|"3. registrarAnimal / registrarLote en Backend CRUD"| Backend[Backend CRUD]
+    end
+
+    %% IoT y Sensores
+    subgraph IoT_Sensores
+        IoT[Caravanas Inteligentes / Sensores IoT] -->|"4. Datos en tiempo real"| Backend
+        IoT -->|"5. Alertas tempranas"| Backend
+        IoT -->|"6. updateRegistry con IOT_ROLE"| Registry[GanadoRegistryUpgradeable]
+    end
+
+    %% Salud
+    subgraph Salud
+        Vet[Veterinario] -->|"7. registrarVacuna / registrarTratamiento con VET_ROLE"| Backend
+    end
+
+    %% Procesamiento
+    subgraph Procesamiento
+        Frio[Frigorífico] -->|"8. registrarCorte / registrarQR con FRIGORIFICO_ROLE"| Backend
+    end
+
+    %% Auditoría
+    subgraph Auditoria
+        Auditor[Auditor] -->|"9. consultarRegistros con AUDITOR_ROLE"| Registry
+    end
+
+    %% Interacción con Registry
+    Backend -->|"10. hashAnimal / hashLote -> updateRegistry (DAO_ROLE)"| Registry
+    ERC20 -->|"11. mintByDAO / mintByMinter -> updateRegistry"| Registry
+    NFT -->|"12. mintAnimal / transferAnimal -> updateRegistry (DAO_ROLE / UPGRADER_ROLE)"| Registry
+
+    %% Control
+    subgraph Control
+        Admin[Admin / DAO_ROLE] 
+        Admin -->|"13. pause / unpause con PAUSER_ROLE"| ERC20
+        Admin -->|"14. pause / unpause con PAUSER_ROLE"| NFT
+        Admin -->|"15. upgradeTo con UPGRADER_ROLE"| ERC20
+        Admin -->|"16. upgradeTo con UPGRADER_ROLE"| NFT
+        Admin -->|"17. upgradeTo con UPGRADER_ROLE"| Registry
+    end
+
+    %% Safe Multisig
+    subgraph SafeMultisig
+        Safe[Safe Multisig]
+        ERC20 -.->|"18. mintByDAO / transferBatch aprobadas"| Safe
+        NFT -.->|"19. mintAnimal / transferAnimal aprobadas"| Safe
+        Registry -.->|"20. updateRegistry aprobadas"| Safe
+        Backend -.->|"21. acciones críticas aprobadas"| Safe
+        Admin -.->|"22. pause / upgrade críticas aprobadas"| Safe
+    end
+
+    %% Consumidor
+    subgraph Consumidor
+        QR[QR Corte] -->|"23. consultaTrazabilidad"| Frontend[Frontend]
+        Frontend -->|"24. solicita datos"| Registry
+        Frontend -->|"25. solicita datos"| Backend
+    end
+
+    %% Roles y estilo
+    classDef dao fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef minter fill:#9f9,stroke:#333,stroke-width:2px;
+    classDef producer fill:#ff9,stroke:#333,stroke-width:2px;
+    classDef vet fill:#9ff,stroke:#333,stroke-width:2px;
+    classDef frigorifico fill:#f9c,stroke:#333,stroke-width:2px;
+    classDef auditor fill:#ccc,stroke:#333,stroke-width:2px;
+    classDef admin fill:#fc9,stroke:#333,stroke-width:2px;
+    classDef iot fill:#c9f,stroke:#333,stroke-width:2px;
+
+    class ERC20,NFT,Registry dao;
+    class ERC20 minter;
+    class P1 producer;
+    class Vet vet;
+    class Frio frigorifico;
+    class Auditor auditor;
+    class Admin admin;
+    class IoT iot;
 
 ```
 2. Diagrama simplificado para presentación
 
 ```mermaid
 flowchart LR
-    %% Bloques principales
-    subgraph Producción
-        P1[Productor] --> NFT[AnimalNFT]
-        P1 --> ERC20[GanadoToken]
-        P1 --> Backend[Backend CRUD]
-    end
+    P1[Productor] --> NFT[AnimalNFT]
+    P1 --> ERC20[GanadoToken]
+    P1 --> Backend[Backend]
 
-    subgraph IoT
-        IoT[Sensores IoT] --> Backend
-        IoT --> Registry[Registry]
-    end
+    IoT[IoT Sensores] --> Backend
+    IoT --> Registry[GanadoRegistry]
 
-    subgraph Salud
-        Vet[Veterinario] --> Backend
-    end
+    Vet[Veterinario] --> Backend
+    Frio[Frigorífico] --> Backend
+    Auditor[Auditor] --> Registry
 
-    subgraph Procesamiento
-        Frio[Frigorífico] --> Backend
-    end
+    Backend --> Registry
+    ERC20 --> Registry
+    NFT --> Registry
 
-    subgraph Auditoría
-        Auditor[Auditor] --> Registry
-    end
+    Admin[Admin/DAO] --> ERC20
+    Admin --> NFT
+    Admin --> Registry
 
-    subgraph Control
-        Admin[DAO / Admin] -->|Gobernanza| Registry
-        Admin -->|Pausar / Upgrade| NFT
-        Admin --> ERC20
-    end
+    Safe[Safe Multisig] -.-> ERC20
+    Safe -.-> NFT
+    Safe -.-> Registry
+    Safe -.-> Backend
+    Safe -.-> Admin
 
-    subgraph Safe
-        Safe[Safe Multisig] -->|Aprueba operaciones| Admin
-        Safe --> Registry
-        Safe --> NFT
-        Safe --> ERC20
-    end
+    QR[QR Corte] --> Frontend[Frontend]
+    Frontend --> Registry
+    Frontend --> Backend
 
-    subgraph Consumidor
-        QR[QR Corte] --> Frontend[Frontend]
-        Frontend --> Registry
-        Frontend --> Backend
-    end
