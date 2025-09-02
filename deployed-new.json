@@ -1,8 +1,0 @@
-{
-  "network": "polygon-amoy",
-  "contracts": {
-    "GanadoTokenUpgradeable": "0x1d663FB788D01Cc7F2C98549A100Bc0b4C2a4430",
-    "AnimalNFTUpgradeable": "0xB37AF476c029Ec1C0056988d3Ce0b20aA3ea9F66",
-    "GanadoRegistryUpgradeable": "0x04eF92BB7C1b3CDC22e941cEAB2206311C57ef68"
-  }
-}

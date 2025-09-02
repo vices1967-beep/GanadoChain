@@ -159,7 +159,9 @@ deployed-new.json
 # =========================
 # Backup Base de datos
 # =========================
-clean_backup.json
+backend/clean_backup.json
+backend/backup.json
+backend/backup_without_users.json
 # =========================
 # IPFS / temporary hashes
 # =========================
