@@ -59,3 +59,30 @@ graph TD
     style L fill:#fff3e0
     style M fill:#e8f5e9
     style N fill:#fce4ec
+
+    ```
+    📊 Estructura Final Mejorada
+    
+    Esta organización mantiene una separación clara de responsabilidades, facilita el mantenimiento y permite escalar el sistema de manera modular. Cada archivo tiene una función específica y relacionada, lo que mejora la legibilidad y el trabajo en equipo.
+
+    ```mermaid
+    graph TD
+    A[Users Models] --> B[Reputation Models]
+    A --> C[Notification Models]
+    
+    D[Cattle Models] --> E[Blockchain Models]
+    D --> F[Audit Models]
+    
+    G[IoT Models] --> H[Analytics Models]
+    
+    I[Core Models] --> J[Utilities]
+    I --> K[Metrics Models]
+    
+    style B fill:#e8f5e9
+    style C fill:#fff3e0
+    style E fill:#e1f5fe
+    style F fill:#fce4ec
+    style H fill:#f3e5f5
+    style K fill:#ffebee
+
+    ```
