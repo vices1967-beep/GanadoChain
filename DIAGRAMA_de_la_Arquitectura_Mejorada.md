@@ -60,12 +60,13 @@ graph TD
     style M fill:#e8f5e9
     style N fill:#fce4ec
 
-    ```
-    📊 Estructura Final Mejorada
-    
+```
+
+📊 Estructura Final Mejorada
+
     Esta organización mantiene una separación clara de responsabilidades, facilita el mantenimiento y permite escalar el sistema de manera modular. Cada archivo tiene una función específica y relacionada, lo que mejora la legibilidad y el trabajo en equipo.
 
-    ```mermaid
+```mermaid
     graph TD
     A[Users Models] --> B[Reputation Models]
     A --> C[Notification Models]
@@ -85,4 +86,4 @@ graph TD
     style H fill:#f3e5f5
     style K fill:#ffebee
 
-    ```
+```
