@@ -105,30 +105,13 @@ class BatchSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Formato de hash de transacción inválido.')
         return value
 
-# class IoTDeviceSerializer(serializers.ModelSerializer):
-#     device_type_display = serializers.CharField(source='get_device_type_display', read_only=True)
-#     status_display = serializers.CharField(source='get_status_display', read_only=True)
-#     is_active = serializers.BooleanField(read_only=True)
-#     animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True, allow_null=True)
-#     animal_breed = serializers.CharField(source='animal.breed', read_only=True, allow_null=True)
-    
-#     class Meta:
-#         model = IoTDevice
-#         fields = [
-#             'id', 'device_id', 'device_type', 'device_type_display', 'status', 
-#             'status_display', 'is_active', 'animal', 'animal_ear_tag', 'animal_breed',
-#             'last_reading', 'battery_level', 'location', 'created_at', 'updated_at'
-#         ]
-#         read_only_fields = ['created_at', 'updated_at', 'is_active']
-
 class BatchCreateSerializer(serializers.ModelSerializer):
-    """Serializer especializado para crear lotes con validación adicional"""
     class Meta:
         model = Batch
         fields = ['name', 'animals', 'origin', 'destination', 'status', 'created_by']
+        ref_name = 'CattleBatchCreateSerializer'  # ← Añadir esta línea
     
     def validate_animals(self, value):
-        # Verificar que todos los animales pertenezcan al mismo dueño
         if value:
             owners = set(animal.owner_id for animal in value)
             if len(owners) > 1:
@@ -136,7 +119,6 @@ class BatchCreateSerializer(serializers.ModelSerializer):
         return value
 
 class AnimalMintSerializer(serializers.Serializer):
-    """Serializer para el proceso de minting de NFTs"""
     animal_id = serializers.IntegerField()
     wallet_address = serializers.CharField(max_length=42)
     
@@ -147,7 +129,6 @@ class AnimalMintSerializer(serializers.Serializer):
         return value
 
 class HealthDataSerializer(serializers.Serializer):
-    """Serializer para recepción de datos de salud desde dispositivos IoT"""
     device_id = serializers.CharField(max_length=100)
     animal_ear_tag = serializers.CharField(max_length=100)
     temperature = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
@@ -157,7 +138,6 @@ class HealthDataSerializer(serializers.Serializer):
     battery_level = serializers.IntegerField(required=False, min_value=0, max_value=100)
     
     def validate(self, data):
-        # Al menos un dato de salud debe ser proporcionado
         health_fields = ['temperature', 'heart_rate', 'movement_activity']
         if not any(field in data for field in health_fields):
             raise serializers.ValidationError('Al menos un dato de salud (temperature, heart_rate, movement_activity) debe ser proporcionado.')

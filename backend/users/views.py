@@ -18,7 +18,6 @@ from .serializers import (
     UserExportSerializer
 )
 from .models import UserActivityLog, UserPreference, APIToken
-from blockchain.services import BlockchainService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -278,8 +277,18 @@ class UserRegistrationView(generics.CreateAPIView):
             user_agent=self.request.META.get('HTTP_USER_AGENT', ''),
             metadata={'action': 'registration'}
         )
+    
+    def get_client_ip(self, request):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
 
 class UserTokenObtainPairView(TokenObtainPairView):
+    serializer_class = None  # TokenObtainPairView ya tiene su propio serializer
+    
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
         
@@ -386,6 +395,7 @@ class UserActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
 
 class PasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
+    serializer_class = PasswordResetRequestSerializer
     
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
@@ -410,6 +420,7 @@ class PasswordResetView(APIView):
 
 class PasswordResetConfirmView(APIView):
     permission_classes = [permissions.AllowAny]
+    serializer_class = PasswordResetConfirmSerializer
     
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
@@ -430,6 +441,7 @@ class PasswordResetConfirmView(APIView):
 class UserProfileView(APIView):
     """Vista para obtener el perfil del usuario (legacy)"""
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = UserProfileSerializer
     
     def get(self, request):
         serializer = UserProfileSerializer(request.user)

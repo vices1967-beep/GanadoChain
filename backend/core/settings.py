@@ -1,33 +1,82 @@
 import os
+import sys
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 
 # ==============================================================================
-# CONFIGURACIÓN BÁSICA DE DJANGO
+# CONFIGURACIÓN INICIAL
 # ==============================================================================
 
-# Cargar variables de entorno desde archivo .env
+# Cargar variables de entorno
 load_dotenv()
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-default-key-for-dev')
+# ==============================================================================
+# CONFIGURACIÓN DE URLS
+# ==============================================================================
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
+ROOT_URLCONF = 'core.urls'
 
-# Hosts/domain names that are valid for this site
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 # ==============================================================================
-# CONFIGURACIÓN DE APLICACIONES
+# SEGURIDAD - CONFIGURACIÓN CRÍTICA
+# ==============================================================================
+
+# SECRET_KEY con validación
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if 'test' in sys.argv or 'test_coverage' in sys.argv:
+        SECRET_KEY = 'test-secret-key-for-testing-only'
+    else:
+        raise ValueError("DJANGO_SECRET_KEY no está configurada en las variables de entorno")
+
+# Debug mode con validación
+DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
+
+# Allowed hosts con validación
+ALLOWED_HOSTS = []
+hosts = os.getenv('ALLOWED_HOSTS', '')
+if hosts:
+    ALLOWED_HOSTS = [host.strip() for host in hosts.split(',') if host.strip()]
+else:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
+# ==============================================================================
+# CONFIGURACIÓN DE BASE DE DATOS MEJORADA
+# ==============================================================================
+
+# Elegir entre SQLite (desarrollo) và PostgreSQL (producción)
+if os.getenv('DATABASE_URL'):
+    # PostgreSQL desde DATABASE_URL (para producción)
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=os.getenv('DATABASE_URL'),
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+else:
+    # SQLite para desarrollo
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                'timeout': 20,
+            }
+        }
+    }
+
+# ==============================================================================
+# APLICACIONES Y MIDDLEWARE
 # ==============================================================================
 
 INSTALLED_APPS = [
-    # Django core apps
+    # Django core
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -35,26 +84,24 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
-    # Third-party apps
+    # Third-party
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-    'drf_yasg',  # Para documentación API
+    'drf_yasg',
+    'django_filters',
     
     # Custom apps
-    'users',      # Gestión de usuarios y autenticación
-    'cattle',     # Gestión de animales y lotes
-    'iot',        # Dispositivos IoT y datos en tiempo real
-    'blockchain', # Integración con contratos inteligentes
+    'users',
+    'cattle', 
+    'iot',
+    'blockchain',
 ]
 
-# ==============================================================================
-# MIDDLEWARE CONFIGURATION
-# ==============================================================================
-
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # Debe estar primero para CORS
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Para static files en producción
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -62,22 +109,15 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
 # ==============================================================================
-# URL CONFIGURATION
-# ==============================================================================
-
-ROOT_URLCONF = 'core.urls'
-
-# ==============================================================================
-# TEMPLATE CONFIGURATION
+# CONFIGURACIÓN DE TEMPLATES
 # ==============================================================================
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
+        'DIRS': [BASE_DIR / 'templates'],  # Directorio para templates personalizados
+        'APP_DIRS': True,  # IMPORTANTE: debe ser True para que el admin funcione
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
@@ -88,71 +128,49 @@ TEMPLATES = [
         },
     },
 ]
-
 # ==============================================================================
-# DATABASE CONFIGURATION
-# ==============================================================================
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
-# ==============================================================================
-# AUTHENTICATION CONFIGURATION
-# ==============================================================================
-
-# Custom user model
-AUTH_USER_MODEL = 'users.User'
-
-# Password validation
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
-
-# ==============================================================================
-# REST FRAMEWORK CONFIGURATION
+# REST FRAMEWORK MEJORADO
 # ==============================================================================
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle'
-    ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/day',
-        'user': '1000/day'
-    }
+        'user': '1000/day',
+        'burst': '60/minute',
+        'sustained': '1000/day'
+    },
+    'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
 }
 
-# JWT Configuration
+# Configuración Simple JWT mejorada
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': False,
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': False,
+    'UPDATE_LAST_LOGIN': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
     'VERIFYING_KEY': None,
@@ -170,40 +188,44 @@ SIMPLE_JWT = {
     'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
     'JTI_CLAIM': 'jti',
     'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
-    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=60),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
 # ==============================================================================
-# BLOCKCHAIN CONFIGURATION - GANADOCHAIN
+# CONFIGURACIÓN BLOCKCHAIN MEJORADA
 # ==============================================================================
 
-# Polygon Amoy Testnet Configuration
-BLOCKCHAIN_NETWORK = os.getenv('BLOCKCHAIN_NETWORK', 'polygon-amoy')
-BLOCKCHAIN_RPC_URL = os.getenv('BLOCKCHAIN_RPC_URL', 'https://rpc-amoy.polygon.technology')
-CHAIN_ID = int(os.getenv('CHAIN_ID', '80002'))
-EXPLORER_URL = os.getenv('EXPLORER_URL', 'https://amoy.polygonscan.com')
+# Validación de direcciones de contratos
+def validate_ethereum_address(address):
+    if address and not address.startswith('0x'):
+        raise ValueError(f"Dirección Ethereum inválida: {address}")
+    return address
 
-# Contract Addresses (usando contratos desplegados)
-GANADO_TOKEN_ADDRESS = os.getenv('GANADO_TOKEN_ADDRESS', '0x1d663FB788D01Cc7F2C98549A100Bc0b4C2a4430')
-ANIMAL_NFT_ADDRESS = os.getenv('ANIMAL_NFT_ADDRESS', '0xB37AF476c029Ec1C0056988d3Ce0b20aA3ea9F66')
-REGISTRY_ADDRESS = os.getenv('REGISTRY_ADDRESS', '0x04eF92BB7C1b3CDC22e941cEAB2206311C57ef68')
-
-# Wallet Configuration
-ADMIN_WALLET_ADDRESS = os.getenv('ADMIN_WALLET_ADDRESS', '0xF27c409539AC5a5deB6fe0FCac5434AD9867B310')
-ADMIN_PRIVATE_KEY = os.getenv('ADMIN_PRIVATE_KEY', '')  # Nunca committear en producción
-
-# Safe Multisig Addresses
-SAFE_DEPLOYER1 = os.getenv('SAFE_DEPLOYER1', '0xb189f4a9e0dd3db093292a4774c77b196647d6c1')
-SAFE_DEPLOYER2 = os.getenv('SAFE_DEPLOYER2', '0x02797b470c81e5fdd827602b60bbe1b831ac43d1')
-SAFE_DEPLOYER3 = os.getenv('SAFE_DEPLOYER3', '0x0d123e3501868e865f68eed74f4edcf97fa1f023')
-
-# API Keys
-ETHERSCAN_API_KEY = os.getenv('ETHERSCAN_API_KEY', 'B575EDK97J1KQMVJ7PP7G2EK2QTCRYREN2')
-IPFS_API_URL = os.getenv('IPFS_API_URL', '/ip4/127.0.0.1/tcp/5001')
+BLOCKCHAIN_CONFIG = {
+    'NETWORK': os.getenv('BLOCKCHAIN_NETWORK', 'polygon-amoy'),
+    'RPC_URL': os.getenv('BLOCKCHAIN_RPC_URL', 'https://rpc-amoy.polygon.technology'),
+    'CHAIN_ID': int(os.getenv('CHAIN_ID', 80002)),
+    'EXPLORER_URL': os.getenv('EXPLORER_URL', 'https://amoy.polygonscan.com'),
+    'CONTRACTS': {
+        'GANADO_TOKEN': validate_ethereum_address(os.getenv('GANADO_TOKEN_ADDRESS')),
+        'ANIMAL_NFT': validate_ethereum_address(os.getenv('ANIMAL_NFT_ADDRESS')),
+        'REGISTRY': validate_ethereum_address(os.getenv('REGISTRY_ADDRESS')),
+    },
+    'ADMIN_WALLET': validate_ethereum_address(os.getenv('ADMIN_WALLET_ADDRESS')),
+    'SAFE_ADDRESSES': [
+        validate_ethereum_address(os.getenv('SAFE_DEPLOYER1')),
+        validate_ethereum_address(os.getenv('SAFE_DEPLOYER2')),
+        validate_ethereum_address(os.getenv('SAFE_DEPLOYER3')),
+    ],
+    'API_KEYS': {
+        'ETHERSCAN': os.getenv('ETHERSCAN_API_KEY'),
+        'IPFS_URL': os.getenv('IPFS_API_URL', '/ip4/127.0.0.1/tcp/5001'),
+    }
+}
 
 # ==============================================================================
-# CORS CONFIGURATION
+# CORS Y SEGURIDAD
 # ==============================================================================
 
 CORS_ALLOWED_ORIGINS = [
@@ -214,35 +236,38 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # Solo en desarrollo
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
+
+# Configuración de seguridad adicional
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
+SECURE_REFERRER_POLICY = 'same-origin'
 
 # ==============================================================================
 # INTERNATIONALIZATION
 # ==============================================================================
 
 LANGUAGE_CODE = 'es-es'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Argentina/Buenos_Aires'  # Más específico para tu ubicación
 USE_I18N = True
+USE_L10N = True
 USE_TZ = True
 
 # ==============================================================================
-# STATIC FILES
+# ARCHIVOS ESTÁTICOS Y MEDIA
 # ==============================================================================
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static']
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# ==============================================================================
-# DEFAULT AUTO FIELD
-# ==============================================================================
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# Configuración Whitenoise para producción
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ==============================================================================
-# LOGGING CONFIGURATION
+# LOGGING MEJORADO
 # ==============================================================================
 
 LOGGING = {
@@ -257,51 +282,137 @@ LOGGING = {
             'format': '{levelname} {message}',
             'style': '{',
         },
+        'json': {
+            'format': '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "module": "%(module)s", "message": "%(message)s"}',
+        },
     },
     'handlers': {
         'console': {
-            'level': 'INFO',
+            'level': 'DEBUG' if DEBUG else 'INFO',
             'class': 'logging.StreamHandler',
-            'formatter': 'simple'
+            'formatter': 'simple' if DEBUG else 'json',
         },
         'file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'django.log',
+            'maxBytes': 1024 * 1024 * 10,  # 10 MB
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+        'blockchain_file': {
             'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'debug.log',
-            'formatter': 'verbose'
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': BASE_DIR / 'logs' / 'blockchain.log',
+            'maxBytes': 1024 * 1024 * 20,  # 20 MB
+            'backupCount': 3,
+            'formatter': 'verbose',
         },
     },
     'loggers': {
         'django': {
             'handlers': ['console', 'file'],
-            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'level': 'INFO',
             'propagate': True,
         },
         'blockchain': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'blockchain_file'],
             'level': 'DEBUG',
             'propagate': False,
         },
         'iot': {
             'handlers': ['console', 'file'],
-            'level': 'DEBUG',
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'users': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },
 }
 
 # ==============================================================================
-# SECURITY SETTINGS (Production)
+# CONFIGURACIÓN DE SEGURIDAD PARA PRODUCCIÓN
 # ==============================================================================
 
 if not DEBUG:
+    # HTTPS settings
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    
+    # Security headers
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
     SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+    
+    # Additional security
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+    SESSION_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = True
+
+# ==============================================================================
+# CONFIGURACIONES ADICIONALES
+# ==============================================================================
+
+# Custom user model
+AUTH_USER_MODEL = 'users.User'
+
+# Default primary key field type
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ==============================================================================
+# CONFIGURACIÓN PARA DRF-YASG (SWAGGER)
+# ==============================================================================
+
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
+        }
+    },
+    'USE_SESSION_AUTH': False,
+    'JSON_EDITOR': True,
+    'DOC_EXPANSION': 'none',
+    'DEFAULT_MODEL_RENDERING': 'example',
+    'DEEP_LINKING': True,
+    # ESTA LÍNEA ES LA QUE FALTA Y CAUSA EL ERROR:
+    'DEFAULT_INFO': 'core.urls.schema_view.info',  # ← AGREGAR ESTA LÍNEA
+}
+
+# NOTA: SPECTACULAR_SETTINGS es para drf-spectacular, no para drf-yasg
+# Si quieres usar drf-spectacular, necesitas instalarlo y cambiar la configuración
+# pip install drf-spectacular
+
+# ==============================================================================
+# VALIDACIONES FINALES
+# ==============================================================================
+
+# Validar que las variables críticas estén configuradas
+if not DEBUG:
+    required_env_vars = [
+        'DJANGO_SECRET_KEY',
+        'DATABASE_URL',
+        'ADMIN_WALLET_ADDRESS',
+    ]
+    
+    for var in required_env_vars:
+        if not os.getenv(var):
+            raise ValueError(f"Variable de entorno requerida no configurada: {var}")
+
+# Crear directorio de logs si no existe
+(BASE_DIR / 'logs').mkdir(exist_ok=True)
+
+# Crear directorio de templates si no existe
+(BASE_DIR / 'templates').mkdir(exist_ok=True)
+
+# Crear directorio static si no existe
+(BASE_DIR / 'static').mkdir(exist_ok=True)

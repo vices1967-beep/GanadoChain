@@ -442,6 +442,7 @@ class DeviceRegistrationView(APIView):
 
 class IoTStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = None  # Esta vista no usa serializer
     
     def get(self, request):
         stats = {

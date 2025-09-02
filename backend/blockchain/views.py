@@ -1,6 +1,7 @@
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.views import APIView
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
@@ -196,8 +197,9 @@ class MintNFTView(generics.CreateAPIView):
                 'error': f'Error minting NFT: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-class CheckRoleView(generics.RetrieveAPIView):
+class CheckRoleView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = CheckRoleSerializer
 
     def get(self, request, *args, **kwargs):
         wallet_address = request.query_params.get('wallet_address')
@@ -262,8 +264,9 @@ class MintTokensView(generics.CreateAPIView):
                 'error': f'Error minting tokens: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-class AnimalHistoryView(generics.RetrieveAPIView):
+class AnimalHistoryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = AnimalHistorySerializer
     
     def get(self, request, animal_id):
         blockchain_service = BlockchainService()
@@ -419,8 +422,9 @@ class IoTHealthDataView(generics.CreateAPIView):
                 'error': f'Error procesando datos IoT: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-class NetworkStatusView(generics.RetrieveAPIView):
+class NetworkStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = NetworkStatusSerializer
     
     def get(self, request, *args, **kwargs):
         blockchain_service = BlockchainService()
@@ -453,8 +457,9 @@ class NetworkStatusView(generics.RetrieveAPIView):
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
-class TransactionStatusView(generics.RetrieveAPIView):
+class TransactionStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TransactionStatusSerializer
     
     def get(self, request, tx_hash):
         blockchain_service = BlockchainService()
@@ -522,8 +527,9 @@ class TransactionStatusView(generics.RetrieveAPIView):
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
-class GasPriceView(generics.RetrieveAPIView):
+class GasPriceView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = GasPriceSerializer
     
     def get(self, request, *args, **kwargs):
         blockchain_service = BlockchainService()
@@ -550,17 +556,20 @@ class GasPriceView(generics.RetrieveAPIView):
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
 
-class BlockchainStatsView(generics.RetrieveAPIView):
+class BlockchainStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    serializer_class = BlockchainStatsSerializer
     
     def get(self, request, *args, **kwargs):
         try:
+            from django.db import models
+            
             stats = {
                 'total_events': BlockchainEvent.objects.count(),
                 'total_transactions': ContractInteraction.objects.count(),
                 'successful_transactions': ContractInteraction.objects.filter(status='SUCCESS').count(),
                 'failed_transactions': ContractInteraction.objects.filter(status='FAILED').count(),
-                'average_gas_price': GasPriceHistory.objects.aggregate(avg_gas=models.Avg('gas_price'))['avg_gas_price'] or 0,
+                'average_gas_price': GasPriceHistory.objects.aggregate(avg_gas=models.Avg('gas_price'))['avg_gas'] or 0,
                 'total_gas_used': ContractInteraction.objects.aggregate(total_gas=models.Sum('gas_used'))['total_gas'] or 0,
                 'last_block_number': NetworkState.objects.first().last_block_number if NetworkState.objects.exists() else 0,
                 'active_contracts': SmartContract.objects.filter(is_active=True).count(),

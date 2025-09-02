@@ -320,16 +320,18 @@ class AnimalHistorySerializer(serializers.Serializer):
     gas_price = serializers.IntegerField(required=False, allow_null=True)
 
 class BatchCreateSerializer(serializers.Serializer):
-    name = serializers.CharField(max_length=100)
-    animal_ids = serializers.ListField(
-        child=serializers.IntegerField(min_value=1),
-        min_length=1,
-        max_length=100
-    )
-    origin = serializers.CharField(max_length=255)
-    destination = serializers.CharField(max_length=255)
-    metadata_uri = serializers.CharField(required=False, allow_blank=True, max_length=255)
-    notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    class Meta:
+        ref_name = 'BlockchainBatchCreateSerializer'  # ← Añadir Meta class
+        name = serializers.CharField(max_length=100)
+        animal_ids = serializers.ListField(
+            child=serializers.IntegerField(min_value=1),
+            min_length=1,
+            max_length=100
+        )
+        origin = serializers.CharField(max_length=255)
+        destination = serializers.CharField(max_length=255)
+        metadata_uri = serializers.CharField(required=False, allow_blank=True, max_length=255)
+        notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
 
 class ContractCallSerializer(serializers.Serializer):
     contract_address = EthereumAddressField()

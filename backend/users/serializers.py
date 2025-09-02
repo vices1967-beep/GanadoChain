@@ -124,9 +124,9 @@ class UserListSerializer(serializers.ModelSerializer):
         )
 
 class ChangePasswordSerializer(serializers.Serializer):
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True, validators=[validate_password])
-    new_password2 = serializers.CharField(required=True)
+    old_password = serializers.CharField(required=True, write_only=True)
+    new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
+    new_password2 = serializers.CharField(required=True, write_only=True)
 
     def validate(self, attrs):
         if attrs['new_password'] != attrs['new_password2']:
@@ -189,7 +189,7 @@ class APITokenSerializer(serializers.ModelSerializer):
             'token_type_display', 'is_active', 'expires_at', 'last_used',
             'is_expired', 'created_at'
         )
-        read_only_fields = ('id', 'token', 'created_at', 'is_expired', 'user_username')
+        read_only_fields = ('id', 'created_at', 'is_expired', 'user_username')
         extra_kwargs = {
             'token': {'write_only': True}
         }
@@ -213,9 +213,9 @@ class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    token = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True, validators=[validate_password])
-    new_password2 = serializers.CharField(required=True)
+    token = serializers.CharField(required=True, write_only=True)
+    new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
+    new_password2 = serializers.CharField(required=True, write_only=True)
 
     def validate(self, attrs):
         if attrs['new_password'] != attrs['new_password2']:
