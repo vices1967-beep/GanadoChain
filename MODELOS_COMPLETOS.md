@@ -633,6 +633,400 @@ flowchart LR
 
 ```
 3. Diagrama Completo con recuadros
+📋 Características del Diagrama:
+✅ Organización por Archivos:
+
+    Color-coded por archivo: Cada grupo de modelos está separado por su archivo de origen
+
+    Estructura modular: Reflecta la estructura real del proyecto Django
+
+✅ Modelos Completos:
+
+    Todos los campos: Incluye todos los campos de cada modelo con sus tipos
+
+    Relaciones completas: Todas las FK y relaciones many-to-many
+
+    Constraints: PK, UK, y relaciones bien definidas
+
+✅ Nuevos Modelos Incluidos:
+
+    Users: UserRole, ReputationScore, Notification
+
+    Cattle: BlockchainEventState, CattleAuditTrail
+
+    IoT: DeviceAnalytics
+
+    Core: SystemMetrics
+
+✅ Relaciones Mejoradas:
+
+    Relaciones de auditoría: User → CattleAuditTrail
+
+    Relaciones de reputación: User → ReputationScore
+
+    Relaciones de analytics: IoTDevice → DeviceAnalytics
+
+    Relaciones de estado: BlockchainEvent → BlockchainEventState
+
+✅ Formato Consistente:
+
+    Misma sintaxis: Sigue el mismo formato que el diagrama original
+
+    Orden lógico: Agrupado por funcionalidad y archivo
+
+    Documentación clara: Comentarios que explican cada sección
+
+Este diagrama representa completamente la estructura de la base de datos del sistema GanadoChain, mostrando todas las tablas, campos, relaciones y constraints de manera organizada y fácil de entender.
+
+# 🐄 Sistema GanadoChain - Explicación Completa de Archivos y Clases
+backend/
+├── cattle/                          # 🐄 App principal de ganado
+│   ├── models.py                    # Modelos principales
+│   ├── blockchain_models.py         # Extensiones blockchain
+│   ├── audit_models.py              # Auditoría y trazabilidad
+│   └── admin.py                     # Administración Django
+├── iot/                             # 📱 App de dispositivos IoT
+│   ├── models.py                    # Modelos principales IoT
+│   ├── analytics_models.py          # Analítica de dispositivos
+│   └── admin.py                     # Administración IoT
+├── users/                           # 👥 App de usuarios
+│   ├── models.py                    # Modelos principales usuarios
+│   ├── reputation_models.py         # Sistema de reputación
+│   ├── notification_models.py       # Sistema de notificaciones
+│   └── admin.py                     # Administración usuarios
+├── blockchain/                      # ⛓️ App blockchain
+│   ├── models.py                    # Modelos blockchain
+│   └── admin.py                     # Administración blockchain
+└── core/                            # 🧩 Utilidades transversales
+    ├── models.py                    # Validadores y utilidades
+    ├── metrics_models.py            # Métricas del sistema
+    └── admin.py                     # Administración core
+
+# 🐄 CATTLE - Módulo de Ganado
+## 📄 cattle/models.py
+
+### Modelos principales del sistema de ganado:
+
+    Animal: Modelo central que representa un animal en el sistema
+
+        ear_tag: Identificador único (arete)
+
+        breed: Raza del animal
+
+        health_status: Estado de salud (HEALTHY, SICK, etc.)
+
+        token_id: ID del NFT asociado en blockchain
+
+        mint_transaction_hash: Hash de la transacción de mint
+
+        current_batch: Lote actual del animal
+
+    AnimalHealthRecord: Registros de salud de los animales
+
+        Historial de temperaturas, ritmo cardíaco, etc.
+
+        Vinculación con dispositivos IoT
+
+        Registros en blockchain
+
+    Batch: Lotes de animales
+
+        Agrupación de animales para transporte/processamiento
+
+        Trazabilidad completa del lote
+
+        Metadata en IPFS
+
+## 📄 cattle/blockchain_models.py
+
+### Extensiones para blockchain:
+
+    BlockchainEventState: Estado extendido de eventos blockchain
+
+        Seguimiento de confirmaciones (PENDING, CONFIRMED, FAILED, REVERTED)
+
+        Número de bloques de confirmación
+
+        Auditoría de estados de transacciones
+
+## 📄 cattle/audit_models.py
+
+### Sistema de auditoría:
+
+    CattleAuditTrail: Auditoría completa de cambios
+
+        Registro de todas las operaciones (CREATE, UPDATE, DELETE)
+
+        Snapshots de estados anteriores y nuevos
+
+        Vinculación con transacciones blockchain
+
+# 📱 IOT - Módulo de Dispositivos IoT
+## 📄 iot/models.py
+
+### Dispositivos y datos IoT:
+
+    IoTDevice: Dispositivos de monitoreo
+
+        device_type: Tipo (TEMPERATURE, GPS, HEART_RATE, etc.)
+
+        status: Estado (ACTIVE, INACTIVE, MAINTENANCE)
+
+        battery_level: Nivel de batería
+
+        Vinculación con animal y usuario
+
+    GPSData: Datos de geolocalización
+
+        Coordenadas, altitud, precisión
+
+        Velocidad y dirección
+
+        Timestamps de dispositivo
+
+    HealthSensorData: Datos de salud
+
+        Ritmo cardíaco, temperatura, movimiento
+
+        Tiempo de rumia, alimentación
+
+        Alertas automáticas de salud
+
+    DeviceEvent: Eventos de dispositivos
+
+        Conexiones, desconexiones, errores
+
+        Alertas de batería, mantenimiento
+
+    DeviceConfiguration: Configuración de dispositivos
+
+        Intervalos de muestreo
+
+        Umbrales de alerta
+
+        Configuración de funcionalidades
+
+## 📄 iot/analytics_models.py
+
+### Analítica de dispositivos:
+
+    DeviceAnalytics: Métricas de rendimiento
+
+        Total de lecturas por día
+
+        Promedio de batería
+
+        Porcentaje de conectividad
+
+        Calidad de datos
+
+# 👥 USERS - Módulo de Usuarios
+## 📄 users/models.py
+
+### Usuarios y actividad:
+
+    User: Modelo extendido de usuario
+
+        wallet_address: Dirección Ethereum del usuario
+
+        role: Rol en el sistema (PRODUCER, VET, FRIGORIFICO, etc.)
+
+        blockchain_roles: Roles en contratos inteligentes
+
+        Sistema de verificación en blockchain
+
+    UserActivityLog: Registro de actividad
+
+        Login, logout, operaciones blockchain
+
+        Metadata de sesiones
+
+        Vinculación con transacciones
+
+    UserPreference: Preferencias de usuario
+
+        Configuración de notificaciones
+
+        Preferencias de interfaz
+
+    APIToken: Tokens de API
+
+        Para integraciones externas
+
+        Tipos de permisos (READ, WRITE, ADMIN, IOT)
+
+## 📄 users/reputation_models.py
+
+### Sistema de reputación:
+
+    UserRole: Roles granulares
+
+        Roles con scope específico (global, lote, animal, ubicación)
+
+        Tiempo de expiración
+
+        Usuario que otorgó el rol
+
+    ReputationScore: Puntuación de reputación
+
+        Por tipo de usuario (PRODUCER, VET, FRIGORIFICO, AUDITOR)
+
+        Métricas específicas por tipo
+
+        Historial de acciones
+
+## 📄 users/notification_models.py
+
+### Sistema de notificaciones:
+
+    Notification: Notificaciones a usuarios
+
+        Tipos: HEALTH_ALERT, BLOCKCHAIN_TX, IOT_ALERT, etc.
+
+        Prioridades (LOW, MEDIUM, HIGH, URGENT)
+
+        Objetos relacionados (animales, lotes, registros)
+
+# ⛓️ BLOCKCHAIN - Módulo Blockchain
+## 📄 blockchain/models.py
+
+### Operaciones blockchain:
+
+    BlockchainEvent: Eventos de blockchain
+
+        Tipos: MINT, TRANSFER, ROLE_ADD, HEALTH_UPDATE, etc.
+
+        Vinculación con animales y lotes
+
+        Metadata de transacciones
+
+    ContractInteraction: Interacciones con contratos
+
+        Llamadas a funciones de contratos
+
+        Consumo de gas y costos
+
+        Estados de transacciones
+
+    SmartContract: Contratos desplegados
+
+        Información de addresses y ABI
+
+        Versiones y configuración
+
+        Contratos upgradeables
+
+    NetworkState: Estado de la red
+
+        Último bloque sincronizado
+
+        Precio de gas promedio
+
+        Nodos activos
+
+    GasPriceHistory: Historial de precios de gas
+
+        Para análisis y optimización
+
+    TransactionPool: Pool de transacciones pendientes
+
+        Reintentos automáticos
+
+        Estados de procesamiento
+
+# 🧩 CORE - Módulo Transversal
+## 📄 core/models.py
+
+### Utilidades y validadores:
+
+    Validadores:
+
+        validate_ethereum_address(): Validación completa de addresses
+
+        validate_transaction_hash(): Validación de hashes
+
+        validate_ipfs_hash(): Validación de hashes IPFS
+
+## 📄 core/metrics_models.py
+
+### Métricas del sistema:
+
+    SystemMetrics: Dashboard del sistema
+
+        Total de animales, usuarios, transacciones
+
+        Métricas de rendimiento
+
+        Estado de la red y dispositivos
+
+        Tasas de error y disponibilidad
+
+# 🔗 Relaciones Principales del Sistema
+## Flujo de Trazabilidad Completa:
+
+    Usuario (PRODUCER) crea un Animal 🐄
+
+    Dispositivos IoT 📱 monitorean al animal
+
+    Datos de salud 📊 se registran automáticamente
+
+    Eventos blockchain ⛓️ registran operaciones
+
+    Lotes 📦 agrupan animales para transporte
+
+    Auditoría 📝 registra todos los cambios
+
+    Reputación ⭐ se calcula basado en acciones
+
+    Notificaciones 🔔 alertan eventos importantes
+
+## Integración Blockchain:
+
+    Minting de NFTs: Cada animal tiene un NFT único
+
+    Tokens de utilidad: Sistema de recompensas
+
+    Governance: DAO para toma de decisiones
+
+    Oracles: Datos IoT en blockchain
+
+## Seguridad y Auditoría:
+
+    Validación completa de addresses y hashes
+
+    Registro inmutable de todas las operaciones
+
+    Sistema de roles granular con permisos específicos
+
+    Auditoría completa con snapshots de datos
+
+
+# 🎯 Beneficios del Sistema
+## Para Productores:
+
+    Trazabilidad completa desde nacimiento hasta consumidor
+
+    Automatización con dispositivos IoT
+
+    Mayor valor mediante NFTs verificados
+
+## Para Consumidores:
+
+    Transparencia total del origen de la carne
+
+    Verificación blockchain de calidad
+
+    Historial completo del animal
+
+## Para la Industria:
+
+    Reducción de fraudes y errores
+
+    Optimización de procesos
+
+    Datos analíticos para mejoras
+
+Este sistema representa una solución completa de trazabilidad ganadera que combina tecnología IoT, blockchain y analítica avanzada para crear un ecosistema transparente, eficiente y confiable.
 
 ```mermaid
 
