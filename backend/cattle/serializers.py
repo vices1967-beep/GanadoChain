@@ -1,5 +1,7 @@
-from rest_framework import serializers
-from .models import Animal, AnimalHealthRecord, Batch, BlockchainEventState, CattleAuditTrail
+from rest_framework import serializers 
+from .models import Animal, AnimalHealthRecord, Batch, HealthStatus 
+from .blockchain_models import BlockchainEventState
+from .audit_models import CattleAuditTrail
 from django.contrib.auth import get_user_model
 from decimal import Decimal
 
@@ -209,7 +211,7 @@ class BatchStatusUpdateSerializer(serializers.Serializer):
 
 class AnimalHealthUpdateSerializer(serializers.Serializer):
     animal_id = serializers.IntegerField(min_value=1)
-    new_health_status = serializers.ChoiceField(choices=Animal.HealthStatus.choices)
+    new_health_status = serializers.ChoiceField(choices=HealthStatus.choices)
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
     temperature = serializers.DecimalField(
         max_digits=5, 
@@ -229,7 +231,7 @@ class AnimalSearchSerializer(serializers.Serializer):
     breed = serializers.CharField(required=False, max_length=100)
     health_status = serializers.ChoiceField(
         required=False, 
-        choices=Animal.HealthStatus.choices
+        choices=HealthStatus.choices
     )
     min_weight = serializers.DecimalField(
         required=False, 

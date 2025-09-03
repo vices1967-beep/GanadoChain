@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
+from blockchain.views import AssignRoleView, CheckRoleView
 
 app_name = 'users'
 
@@ -27,14 +28,14 @@ urlpatterns = [
     
     # Wallet y blockchain
     path('wallet/connect/', views.WalletConnectView.as_view(), name='wallet-connect'),
-    path('wallet/verify/', views.VerifyWalletView.as_view(), name='wallet-verify'),
-    path('roles/assign/', views.AssignRoleView.as_view(), name='assign-role'),
-    path('roles/check/', views.CheckRoleView.as_view(), name='check-role'),
+    #path('wallet/verify/', views.VerifyWalletView.as_view(), name='wallet-verify'),
+    path('roles/assign/', AssignRoleView.as_view(), name='assign-role'),
+    path('roles/check/', CheckRoleView.as_view(), name='check-role'),
     
     # Búsqueda y utilidades
-    path('search/', views.UserSearchView.as_view(), name='user-search'),
-    path('stats/', views.UserStatsView.as_view(), name='user-stats'),
-    path('export/', views.UserExportView.as_view(), name='user-export'),
+    #path('search/', views.UserSearchView.as_view(), name='user-search'),
+    #spath('stats/', views.UserStatsView.as_view(), name='user-stats'),
+    #path('export/', views.UserExportView.as_view(), name='user-export'),
     
     # Incluir rutas del router
     path('', include(router.urls)),

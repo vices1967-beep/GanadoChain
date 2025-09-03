@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
@@ -18,7 +19,9 @@ from .serializers import (
     UserExportSerializer, UserDetailSerializer, NotificationSerializer,
     UserRoleSerializer, ReputationScoreSerializer, NotificationCreateSerializer
 )
-from .models import UserActivityLog, UserPreference, APIToken, Notification, UserRole, ReputationScore
+from .models import UserActivityLog, UserPreference, APIToken
+from .notification_models import Notification
+from .reputation_models import UserRole, ReputationScore
 import logging
 
 logger = logging.getLogger(__name__)
@@ -548,3 +551,43 @@ class UserProfileView(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+# Añade esto al final de users/views.py
+
+class WalletConnectView(APIView):
+    """Vista para conectar wallet de blockchain"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            wallet_address = request.data.get('wallet_address')
+            
+            if not wallet_address:
+                return Response(
+                    {'error': 'Wallet address is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validar formato de dirección de wallet (básico)
+            if not wallet_address.startswith('0x') or len(wallet_address) != 42:
+                return Response(
+                    {'error': 'Invalid wallet address format'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Asociar wallet al usuario
+            request.user.wallet_address = wallet_address
+            request.user.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Wallet connected successfully',
+                'wallet_address': wallet_address,
+                'user': request.user.username
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Error connecting wallet: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal
-from .models import SystemMetrics
+from .metrics_models import SystemMetrics
 
 class EthereumAddressField(serializers.CharField):
     """Campo personalizado para validar direcciones Ethereum"""

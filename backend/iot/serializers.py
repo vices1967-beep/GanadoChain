@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import IoTDevice, GPSData, HealthSensorData, DeviceEvent, DeviceConfiguration, DeviceAnalytics
+from .models import IoTDevice, GPSData, HealthSensorData, DeviceEvent, DeviceConfiguration
+from .analytics_models import DeviceAnalytics
 from cattle.models import Animal
 from cattle.serializers import AnimalSerializer
 import re

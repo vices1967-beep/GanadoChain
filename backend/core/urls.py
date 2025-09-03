@@ -117,7 +117,7 @@ urlpatterns = [
     ])),
     
     # API Routes de las apps
-    path('api/auth/', include('users.urls')),
+   # path('api/auth/', include('users.urls')),
     path('api/cattle/', include('cattle.urls')),
     path('api/iot/', include('iot.urls')),
     path('api/blockchain/', include('blockchain.urls')),

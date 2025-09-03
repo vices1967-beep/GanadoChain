@@ -5,7 +5,8 @@ from rest_framework.views import APIView
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count, Avg, Max, Min
-from .models import IoTDevice, GPSData, HealthSensorData, DeviceEvent, DeviceConfiguration, DeviceAnalytics
+from .models import IoTDevice, GPSData, HealthSensorData, DeviceEvent, DeviceConfiguration
+from .analytics_models import DeviceAnalytics
 from .serializers import (
     IoTDeviceSerializer, GPSDataSerializer, 
     HealthSensorDataSerializer, DeviceEventSerializer,

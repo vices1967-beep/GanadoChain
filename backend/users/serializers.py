@@ -1,7 +1,10 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import UserActivityLog, UserPreference, APIToken, Notification, UserRole, ReputationScore
+from .models import UserActivityLog, UserPreference, APIToken
+from .reputation_models import UserRole, ReputationScore
+from .notification_models import Notification
+from .notification_models import Notification  # Importación correcta
 import re
 from decimal import Decimal
 

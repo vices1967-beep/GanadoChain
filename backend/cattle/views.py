@@ -6,7 +6,9 @@ from rest_framework.parsers import MultiPartParser, JSONParser
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
-from .models import Animal, AnimalHealthRecord, Batch, BlockchainEventState, CattleAuditTrail
+from .models import Animal, AnimalHealthRecord, Batch
+from .blockchain_models import BlockchainEventState
+from .audit_models import CattleAuditTrail
 from .serializers import (
     AnimalSerializer, 
     AnimalHealthRecordSerializer, 

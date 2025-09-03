@@ -482,7 +482,7 @@ class IoTHealthDataView(generics.CreateAPIView):
             except Animal.DoesNotExist:
                 return Response({
                     'success': False,
-                    'error': f'Animal con arete {data['animal_ear_tag']} no encontrado'
+                    "error": f"Animal con arete {data['animal_ear_tag']} no encontrado"
                 }, status=status.HTTP_404_NOT_FOUND)
             
             # Determinar estado de salud basado en datos IoT

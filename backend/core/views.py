@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count, Avg, Sum
 from django.conf import settings
-from .models import SystemMetrics
+from .metrics_models import SystemMetrics
 from .serializers import (
     SystemMetricsSerializer,
     SystemMetricsSummarySerializer,
