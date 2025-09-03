@@ -113,6 +113,115 @@ class SmartContractViewSet(viewsets.ReadOnlyModelViewSet):
             
         return queryset
 
+class NetworkStateViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = NetworkState.objects.all()
+    serializer_class = NetworkStateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """Obtener el estado actual de la red"""
+        network_state = NetworkState.objects.first()
+        if not network_state:
+            return Response({
+                'success': False,
+                'error': 'No hay estado de red configurado'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = self.get_serializer(network_state)
+        return Response({
+            'success': True,
+            'network_state': serializer.data
+        })
+
+class GasPriceHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = GasPriceHistory.objects.all()
+    serializer_class = GasPriceHistorySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = GasPriceHistory.objects.all()
+        
+        # Filtros
+        hours = self.request.query_params.get('hours', None)
+        limit = self.request.query_params.get('limit', 100)
+        
+        if hours:
+            from django.utils import timezone
+            from datetime import timedelta
+            time_threshold = timezone.now() - timedelta(hours=int(hours))
+            queryset = queryset.filter(timestamp__gte=time_threshold)
+            
+        return queryset.order_by('-timestamp')[:int(limit)]
+    
+    @action(detail=False, methods=['get'])
+    def latest(self, request):
+        """Obtener los últimos precios de gas"""
+        limit = int(request.query_params.get('limit', 10))
+        prices = self.get_queryset()[:limit]
+        serializer = self.get_serializer(prices, many=True)
+        return Response(serializer.data)
+
+class TransactionPoolViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = TransactionPool.objects.all()
+    serializer_class = TransactionPoolSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = TransactionPool.objects.all()
+        
+        # Filtros
+        status_filter = self.request.query_params.get('status', None)
+        
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+            
+        return queryset.order_by('-created_at')
+    
+    @action(detail=False, methods=['get'])
+    def pending(self, request):
+        """Obtener transacciones pendientes"""
+        pending_txs = TransactionPool.objects.filter(status='PENDING').order_by('created_at')
+        serializer = self.get_serializer(pending_txs, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def retry(self, request, pk=None):
+        """Reintentar transacción pendiente"""
+        transaction = self.get_object()
+        
+        if transaction.status != 'PENDING':
+            return Response({
+                'success': False,
+                'error': 'Solo se pueden reintentar transacciones pendientes'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            from .services import BlockchainService
+            service = BlockchainService()
+            result = service.retry_transaction(transaction)
+            
+            if result['success']:
+                transaction.refresh_from_db()
+                serializer = self.get_serializer(transaction)
+                return Response({
+                    'success': True,
+                    'message': 'Transacción reintentada',
+                    'transaction': serializer.data
+                })
+            else:
+                return Response({
+                    'success': False,
+                    'error': result.get('error', 'Error desconocido')
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"Error retrying transaction {pk}: {str(e)}")
+            return Response({
+                'success': False,
+                'error': f'Error reintentando transacción: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
 class AssignRoleView(generics.CreateAPIView):
     serializer_class = AssignRoleSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -373,7 +482,7 @@ class IoTHealthDataView(generics.CreateAPIView):
             except Animal.DoesNotExist:
                 return Response({
                     'success': False,
-                    'error': f'Animal con arete {data["animal_ear_tag"]} no encontrado'
+                    'error': f'Animal con arete {data['animal_ear_tag']} no encontrado'
                 }, status=status.HTTP_404_NOT_FOUND)
             
             # Determinar estado de salud basado en datos IoT
@@ -604,9 +713,11 @@ class BatchCreateView(generics.CreateAPIView):
         try:
             result = blockchain_service.create_batch(
                 serializer.validated_data['name'],
-                serializer.validated_data['description'],
                 serializer.validated_data['animal_ids'],
-                serializer.validated_data['creator_wallet']
+                serializer.validated_data['origin'],
+                serializer.validated_data['destination'],
+                serializer.validated_data.get('metadata_uri', ''),
+                serializer.validated_data.get('notes', '')
             )
             
             if result['success']:
@@ -628,4 +739,81 @@ class BatchCreateView(generics.CreateAPIView):
             return Response({
                 'success': False,
                 'error': f'Error creando lote: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class ContractCallView(generics.CreateAPIView):
+    """Vista para llamadas genéricas a contratos"""
+    serializer_class = ContractCallSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        blockchain_service = BlockchainService()
+        try:
+            result = blockchain_service.call_contract(
+                serializer.validated_data['contract_address'],
+                serializer.validated_data['function_name'],
+                serializer.validated_data['parameters'],
+                serializer.validated_data['value'],
+                serializer.validated_data.get('gas_limit')
+            )
+            
+            if result['success']:
+                return Response({
+                    'success': True,
+                    'tx_hash': result['tx_hash'],
+                    'result': result.get('result'),
+                    'message': 'Llamada a contrato ejecutada correctamente'
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'success': False,
+                    'error': result.get('error', 'Error desconocido')
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"Error calling contract: {str(e)}")
+            return Response({
+                'success': False,
+                'error': f'Error llamando al contrato: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class EventSubscriptionView(generics.CreateAPIView):
+    """Vista para suscribirse a eventos de blockchain"""
+    serializer_class = EventSubscriptionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        blockchain_service = BlockchainService()
+        try:
+            result = blockchain_service.subscribe_to_event(
+                serializer.validated_data['event_name'],
+                serializer.validated_data['contract_address'],
+                serializer.validated_data.get('from_block'),
+                serializer.validated_data.get('to_block'),
+                serializer.validated_data.get('filters', {})
+            )
+            
+            if result['success']:
+                return Response({
+                    'success': True,
+                    'subscription_id': result['subscription_id'],
+                    'message': 'Suscripción a evento creada correctamente'
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    'success': False,
+                    'error': result.get('error', 'Error desconocido')
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            logger.error(f"Error creating event subscription: {str(e)}")
+            return Response({
+                'success': False,
+                'error': f'Error creando suscripción: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)

@@ -3,6 +3,7 @@ from cattle.models import HealthStatus
 from .models import BlockchainEvent, ContractInteraction, NetworkState, SmartContract, GasPriceHistory, TransactionPool
 import re
 import json
+from decimal import Decimal
 
 class EthereumAddressField(serializers.CharField):
     """Campo personalizado para validar direcciones Ethereum"""
@@ -199,7 +200,7 @@ class CheckRoleSerializer(serializers.Serializer):
 
 class MintTokensSerializer(serializers.Serializer):
     to_wallet = EthereumAddressField()
-    amount = serializers.DecimalField(max_digits=18, decimal_places=0, min_value=1, max_value=1000000000000000000)
+    amount = serializers.DecimalField(max_digits=18, decimal_places=0, min_value=Decimal('1'), max_value=Decimal('1000000000000000000'))
     batch_id = serializers.CharField(required=False, allow_blank=True, max_length=100)
 
 class UpdateHealthSerializer(serializers.Serializer):
@@ -219,8 +220,8 @@ class UpdateHealthSerializer(serializers.Serializer):
         decimal_places=2, 
         required=False, 
         allow_null=True,
-        min_value=35.0,
-        max_value=42.0
+        min_value=Decimal('35.0'),
+        max_value=Decimal('42.0')
     )
     heart_rate = serializers.IntegerField(
         required=False, 
@@ -233,8 +234,8 @@ class UpdateHealthSerializer(serializers.Serializer):
         decimal_places=2, 
         required=False, 
         allow_null=True,
-        min_value=0,
-        max_value=100
+        min_value=Decimal('0'),
+        max_value=Decimal('100')
     )
 
     def validate(self, data):
@@ -266,16 +267,16 @@ class IoTHealthDataSerializer(serializers.Serializer):
         decimal_places=2, 
         required=False, 
         allow_null=True,
-        min_value=35.0,
-        max_value=42.0
+        min_value=Decimal('35.0'),
+        max_value=Decimal('42.0')
     )
     movement_activity = serializers.DecimalField(
         max_digits=5, 
         decimal_places=2, 
         required=False, 
         allow_null=True,
-        min_value=0,
-        max_value=100
+        min_value=Decimal('0'),
+        max_value=Decimal('100')
     )
     rumination_time = serializers.IntegerField(
         required=False, 
@@ -288,8 +289,8 @@ class IoTHealthDataSerializer(serializers.Serializer):
         decimal_places=2, 
         required=False, 
         allow_null=True,
-        min_value=0,
-        max_value=100
+        min_value=Decimal('0'),
+        max_value=Decimal('100')
     )
     timestamp = serializers.DateTimeField()
     location_lat = serializers.DecimalField(
@@ -297,16 +298,16 @@ class IoTHealthDataSerializer(serializers.Serializer):
         decimal_places=6, 
         required=False, 
         allow_null=True,
-        min_value=-90,
-        max_value=90
+        min_value=Decimal('-90'),
+        max_value=Decimal('90')
     )
     location_lng = serializers.DecimalField(
         max_digits=9, 
         decimal_places=6, 
         required=False, 
         allow_null=True,
-        min_value=-180,
-        max_value=180
+        min_value=Decimal('-180'),
+        max_value=Decimal('180')
     )
 
 class AnimalHistorySerializer(serializers.Serializer):
@@ -320,18 +321,19 @@ class AnimalHistorySerializer(serializers.Serializer):
     gas_price = serializers.IntegerField(required=False, allow_null=True)
 
 class BatchCreateSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=100)
+    animal_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        min_length=1,
+        max_length=100
+    )
+    origin = serializers.CharField(max_length=255)
+    destination = serializers.CharField(max_length=255)
+    metadata_uri = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
     class Meta:
-        ref_name = 'BlockchainBatchCreateSerializer'  # ← Añadir Meta class
-        name = serializers.CharField(max_length=100)
-        animal_ids = serializers.ListField(
-            child=serializers.IntegerField(min_value=1),
-            min_length=1,
-            max_length=100
-        )
-        origin = serializers.CharField(max_length=255)
-        destination = serializers.CharField(max_length=255)
-        metadata_uri = serializers.CharField(required=False, allow_blank=True, max_length=255)
-        notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+        ref_name = 'BlockchainBatchCreateSerializer'
 
 class ContractCallSerializer(serializers.Serializer):
     contract_address = EthereumAddressField()

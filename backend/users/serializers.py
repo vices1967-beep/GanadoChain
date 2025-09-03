@@ -1,8 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import UserActivityLog, UserPreference, APIToken
+from .models import UserActivityLog, UserPreference, APIToken, Notification, UserRole, ReputationScore
 import re
+from decimal import Decimal
 
 User = get_user_model()
 
@@ -201,13 +202,13 @@ class APITokenCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ('token',)
 
 class UserStatsSerializer(serializers.Serializer):
-    total_users = serializers.IntegerField()
-    active_users = serializers.IntegerField()
-    verified_users = serializers.IntegerField()
+    total_users = serializers.IntegerField(min_value=0)
+    active_users = serializers.IntegerField(min_value=0)
+    verified_users = serializers.IntegerField(min_value=0)
     users_by_role = serializers.DictField()
-    new_users_today = serializers.IntegerField()
-    new_users_this_week = serializers.IntegerField()
-    users_with_blockchain_roles = serializers.IntegerField()
+    new_users_today = serializers.IntegerField(min_value=0)
+    new_users_this_week = serializers.IntegerField(min_value=0)
+    users_with_blockchain_roles = serializers.IntegerField(min_value=0)
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
@@ -257,3 +258,128 @@ class UserExportSerializer(serializers.ModelSerializer):
             'company', 'location', 'date_joined', 'last_login',
             'blockchain_roles_count'
         )
+
+# Nuevos serializers para los modelos adicionales
+
+class NotificationSerializer(serializers.ModelSerializer):
+    notification_type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    
+    class Meta:
+        model = Notification
+        fields = (
+            'id', 'user', 'user_username', 'notification_type', 'notification_type_display',
+            'title', 'message', 'related_object_id', 'related_content_type',
+            'is_read', 'priority', 'priority_display', 'created_at'
+        )
+        read_only_fields = ('created_at',)
+
+class UserRoleSerializer(serializers.ModelSerializer):
+    role_type_display = serializers.CharField(source='get_role_type_display', read_only=True)
+    scope_type_display = serializers.CharField(source='get_scope_type_display', read_only=True)
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    granted_by_username = serializers.CharField(source='granted_by.username', read_only=True, allow_null=True)
+    
+    class Meta:
+        model = UserRole
+        fields = (
+            'id', 'user', 'user_username', 'role_type', 'role_type_display',
+            'scope_type', 'scope_type_display', 'scope_id', 'granted_by',
+            'granted_by_username', 'granted_at', 'expires_at', 'is_active'
+        )
+        read_only_fields = ('granted_at',)
+
+class ReputationScoreSerializer(serializers.ModelSerializer):
+    reputation_type_display = serializers.CharField(source='get_reputation_type_display', read_only=True)
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    
+    class Meta:
+        model = ReputationScore
+        fields = (
+            'id', 'user', 'user_username', 'reputation_type', 'reputation_type_display',
+            'score', 'total_actions', 'positive_actions', 'last_calculated', 'metrics'
+        )
+        read_only_fields = ('last_calculated',)
+
+class UserDetailSerializer(serializers.ModelSerializer):
+    """Serializer detallado para usuario con información extendida"""
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    wallet_short = serializers.CharField(read_only=True)
+    profile_completion = serializers.IntegerField(read_only=True)
+    preferences = UserPreferenceSerializer(source='preferences', read_only=True)
+    activity_logs = UserActivityLogSerializer(many=True, read_only=True)
+    notifications = NotificationSerializer(many=True, read_only=True)
+    detailed_roles = UserRoleSerializer(many=True, read_only=True)
+    reputation_scores = ReputationScoreSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = User
+        fields = (
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'wallet_address', 'wallet_short', 'role', 'role_display',
+            'is_verified', 'is_blockchain_active', 'profile_image',
+            'phone_number', 'company', 'location', 'bio', 'website',
+            'twitter_handle', 'discord_handle', 'blockchain_roles',
+            'profile_completion', 'date_joined', 'last_login',
+            'preferences', 'activity_logs', 'notifications',
+            'detailed_roles', 'reputation_scores'
+        )
+        read_only_fields = ('date_joined', 'last_login', 'profile_completion')
+
+class UserBulkUpdateSerializer(serializers.Serializer):
+    """Serializer para actualización masiva de usuarios"""
+    user_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        min_length=1
+    )
+    role = serializers.ChoiceField(choices=User.ROLE_CHOICES, required=False)
+    is_active = serializers.BooleanField(required=False)
+    is_blockchain_active = serializers.BooleanField(required=False)
+
+class UserImportSerializer(serializers.Serializer):
+    """Serializer para importación de usuarios"""
+    file = serializers.FileField()
+    overwrite_existing = serializers.BooleanField(default=False)
+
+class UserRoleBulkAssignSerializer(serializers.Serializer):
+    """Serializer para asignación masiva de roles"""
+    user_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        min_length=1
+    )
+    role = serializers.ChoiceField(choices=User.BLOCKCHAIN_ROLE_CHOICES)
+    action = serializers.ChoiceField(choices=[('add', 'add'), ('remove', 'remove')])
+
+class ReputationUpdateSerializer(serializers.Serializer):
+    """Serializer para actualización de reputación"""
+    user_id = serializers.IntegerField(min_value=1)
+    reputation_type = serializers.ChoiceField(choices=ReputationScore.REPUTATION_TYPES)
+    score_delta = serializers.DecimalField(
+        max_digits=5, 
+        decimal_places=2,
+        min_value=Decimal('-100.00'),
+        max_value=Decimal('100.00')
+    )
+    reason = serializers.CharField(max_length=500)
+
+class NotificationCreateSerializer(serializers.ModelSerializer):
+    """Serializer para creación de notificaciones"""
+    
+    class Meta:
+        model = Notification
+        fields = (
+            'user', 'notification_type', 'title', 'message',
+            'related_object_id', 'related_content_type', 'priority'
+        )
+
+class NotificationBulkCreateSerializer(serializers.Serializer):
+    """Serializer para creación masiva de notificaciones"""
+    user_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        min_length=1
+    )
+    notification_type = serializers.ChoiceField(choices=Notification.NOTIFICATION_TYPES)
+    title = serializers.CharField(max_length=200)
+    message = serializers.CharField()
+    priority = serializers.ChoiceField(choices=Notification._meta.get_field('priority').choices, default='MEDIUM')

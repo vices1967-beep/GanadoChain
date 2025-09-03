@@ -3,6 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from django.utils.html import format_html
 from django.urls import reverse
 from .models import User, UserActivityLog, UserPreference, APIToken
+from .reputation_models import UserRole, ReputationScore
+from .notification_models import Notification
 import json
 
 @admin.register(User)
@@ -28,7 +30,9 @@ class CustomUserAdmin(UserAdmin):
         'date_joined', 'last_login', 'wallet_short', 
         'profile_completion_display', 'blockchain_roles_list',
         'verification_date', 'last_blockchain_sync',
-        'is_active_display', 'is_blockchain_active_display'
+        'is_active_display', 'is_blockchain_active_display',
+        'reputation_scores_link', 'user_roles_link',
+        'notifications_link'
     ]
     
     fieldsets = (
@@ -47,6 +51,14 @@ class CustomUserAdmin(UserAdmin):
                 'last_blockchain_sync'
             )
         }),
+        ('Sistemas Integrados', {
+            'fields': (
+                'reputation_scores_link',
+                'user_roles_link',
+                'notifications_link'
+            ),
+            'classes': ('collapse',)
+        }),
         ('Perfil Extendido', {
             'fields': (
                 'profile_image', 'phone_number', 'company',
@@ -55,7 +67,7 @@ class CustomUserAdmin(UserAdmin):
                 'profile_completion_display'
             )
         }),
-        ('Permisos y Estado', {
+        ('Permisos and Estado', {
             'fields': (
                 'is_active', 'is_active_display', 'is_staff',
                 'is_superuser', 'groups', 'user_permissions'
@@ -161,6 +173,21 @@ class CustomUserAdmin(UserAdmin):
             return format_html('<span style="color: green;">✅ Activo</span>')
         return format_html('<span style="color: red;">❌ Inactivo</span>')
     is_blockchain_active_display.short_description = 'Blockchain'
+    
+    def reputation_scores_link(self, obj):
+        url = reverse('admin:users_reputationscore_changelist') + f'?user__id__exact={obj.id}'
+        return format_html('<a href="{}">⭐ Ver Puntuaciones de Reputación</a>', url)
+    reputation_scores_link.short_description = 'Reputación'
+    
+    def user_roles_link(self, obj):
+        url = reverse('admin:users_userrole_changelist') + f'?user__id__exact={obj.id}'
+        return format_html('<a href="{}">👑 Ver Roles Detallados</a>', url)
+    user_roles_link.short_description = 'Roles Detallados'
+    
+    def notifications_link(self, obj):
+        url = reverse('admin:users_notification_changelist') + f'?user__id__exact={obj.id}'
+        return format_html('<a href="{}">🔔 Ver Notificaciones</a>', url)
+    notifications_link.short_description = 'Notificaciones'
 
 @admin.register(UserActivityLog)
 class UserActivityLogAdmin(admin.ModelAdmin):
@@ -229,7 +256,6 @@ class UserActivityLogAdmin(admin.ModelAdmin):
     action_display.short_description = 'Acción'
     
     def severity_display(self, obj):
-        # Para logs de actividad, mostramos ícono según el tipo de acción
         if obj.action in ['LOGIN', 'LOGOUT', 'PROFILE_UPDATE']:
             return format_html('<span style="color: green;">🟢 Normal</span>')
         elif obj.action in ['NFT_MINT', 'TOKEN_MINT', 'ROLE_ASSIGN']:
@@ -402,6 +428,303 @@ class APITokenAdmin(admin.ModelAdmin):
             return obj.last_used.strftime("%Y-%m-%d %H:%M:%S")
         return "Nunca"
     last_used_formatted.short_description = 'Último Uso'
+
+@admin.register(UserRole)
+class UserRoleAdmin(admin.ModelAdmin):
+    list_display = [
+        'user_link', 'role_type_display', 'scope_type_display',
+        'scope_id_display', 'is_active_display', 'granted_by_link',
+        'granted_at', 'expires_at_display'
+    ]
+    
+    list_filter = [
+        'role_type', 'scope_type', 'is_active', 'granted_at'
+    ]
+    
+    search_fields = [
+        'user__username', 'user__email', 'scope_id',
+        'granted_by__username', 'role_type'
+    ]
+    
+    readonly_fields = [
+        'granted_at', 'user_link', 'granted_by_link',
+        'scope_id_display', 'expires_at_display'
+    ]
+    
+    fieldsets = (
+        ('Información del Rol', {
+            'fields': (
+                'user_link', 'role_type', 'scope_type',
+                'scope_id', 'scope_id_display'
+            )
+        }),
+        ('Gestión del Rol', {
+            'fields': (
+                'is_active', 'granted_by_link', 'granted_at',
+                'expires_at', 'expires_at_display'
+            )
+        }),
+    )
+    
+    def user_link(self, obj):
+        if obj.user:
+            url = reverse('admin:users_user_change', args=[obj.user.id])
+            return format_html('<a href="{}">{}</a>', url, obj.user.username)
+        return "—"
+    user_link.short_description = 'Usuario'
+    
+    def role_type_display(self, obj):
+        role_colors = {
+            'PRODUCER_ROLE': 'green',
+            'VET_ROLE': 'blue',
+            'FRIGORIFICO_ROLE': 'orange',
+            'AUDITOR_ROLE': 'purple',
+            'IOT_ROLE': 'red',
+            'DAO_ROLE': 'teal',
+            'DEFAULT_ADMIN_ROLE': 'darkred'
+        }
+        color = role_colors.get(obj.role_type, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, dict(User.BLOCKCHAIN_ROLE_CHOICES).get(obj.role_type, obj.role_type)
+        )
+    role_type_display.short_description = 'Rol'
+    
+    def scope_type_display(self, obj):
+        scope_names = {
+            'GLOBAL': 'Global',
+            'BATCH': 'Por Lote',
+            'ANIMAL': 'Por Animal',
+            'LOCATION': 'Por Ubicación'
+        }
+        return scope_names.get(obj.scope_type, obj.scope_type)
+    scope_type_display.short_description = 'Alcance'
+    
+    def scope_id_display(self, obj):
+        if obj.scope_id:
+            # Crear enlace según el tipo de scope
+            if obj.scope_type == 'BATCH' and obj.scope_id.isdigit():
+                url = reverse('admin:cattle_batch_change', args=[obj.scope_id])
+                return format_html('<a href="{}">Lote #{}</a>', url, obj.scope_id)
+            elif obj.scope_type == 'ANIMAL' and obj.scope_id.isdigit():
+                url = reverse('admin:cattle_animal_change', args=[obj.scope_id])
+                return format_html('<a href="{}">Animal #{}</a>', url, obj.scope_id)
+            return obj.scope_id
+        return "Global"
+    scope_id_display.short_description = 'ID del Alcance'
+    
+    def granted_by_link(self, obj):
+        if obj.granted_by:
+            url = reverse('admin:users_user_change', args=[obj.granted_by.id])
+            return format_html('<a href="{}">{}</a>', url, obj.granted_by.username)
+        return "—"
+    granted_by_link.short_description = 'Otorgado por'
+    
+    def is_active_display(self, obj):
+        if obj.is_active:
+            return format_html('<span style="color: green;">✅ Activo</span>')
+        return format_html('<span style="color: red;">❌ Inactivo</span>')
+    is_active_display.short_description = 'Estado'
+    
+    def expires_at_display(self, obj):
+        from django.utils import timezone
+        if obj.expires_at:
+            if obj.expires_at < timezone.now():
+                return format_html('<span style="color: red;">❌ Expirado</span>')
+            return obj.expires_at.strftime("%Y-%m-%d %H:%M")
+        return "—"
+    expires_at_display.short_description = 'Expira'
+
+@admin.register(ReputationScore)
+class ReputationScoreAdmin(admin.ModelAdmin):
+    list_display = [
+        'user_link', 'reputation_type_display', 'score_display',
+        'total_actions', 'positive_actions', 'last_calculated'
+    ]
+    
+    list_filter = [
+        'reputation_type', 'last_calculated'
+    ]
+    
+    search_fields = [
+        'user__username', 'user__email', 'reputation_type'
+    ]
+    
+    readonly_fields = [
+        'last_calculated', 'user_link', 'score_display',
+        'metrics_prettified'
+    ]
+    
+    fieldsets = (
+        ('Información de Reputación', {
+            'fields': (
+                'user_link', 'reputation_type'
+            )
+        }),
+        ('Puntuación', {
+            'fields': (
+                'score', 'score_display', 'total_actions',
+                'positive_actions'
+            )
+        }),
+        ('Métricas Detalladas', {
+            'fields': ('metrics_prettified',),
+            'classes': ('collapse',)
+        }),
+        ('Actualización', {
+            'fields': ('last_calculated',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def user_link(self, obj):
+        if obj.user:
+            url = reverse('admin:users_user_change', args=[obj.user.id])
+            return format_html('<a href="{}">{}</a>', url, obj.user.username)
+        return "—"
+    user_link.short_description = 'Usuario'
+    
+    def reputation_type_display(self, obj):
+        type_colors = {
+            'PRODUCER': 'green',
+            'VET': 'blue',
+            'FRIGORIFICO': 'orange',
+            'AUDITOR': 'purple'
+        }
+        color = type_colors.get(obj.reputation_type, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, obj.get_reputation_type_display()
+        )
+    reputation_type_display.short_description = 'Tipo de Reputación'
+    
+    def score_display(self, obj):
+        if obj.score:
+            if obj.score >= 4.0:
+                color = 'green'
+            elif obj.score >= 3.0:
+                color = 'orange'
+            else:
+                color = 'red'
+            return format_html(
+                '<span style="color: {}; font-weight: bold;">{}/5.0</span>',
+                color, obj.score
+            )
+        return "—"
+    score_display.short_description = 'Puntuación'
+    
+    def metrics_prettified(self, obj):
+        return format_html('<pre style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">{}</pre>', 
+                          json.dumps(obj.metrics, indent=2, ensure_ascii=False))
+    metrics_prettified.short_description = 'Métricas (Formateadas)'
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = [
+        'user_link', 'notification_type_display', 'title_short',
+        'priority_display', 'is_read_display', 'created_at'
+    ]
+    
+    list_filter = [
+        'notification_type', 'priority', 'is_read', 'created_at'
+    ]
+    
+    search_fields = [
+        'user__username', 'user__email', 'title', 'message',
+        'related_object_id'
+    ]
+    
+    readonly_fields = [
+        'created_at', 'user_link', 'notification_type_display',
+        'priority_display', 'related_object_link'
+    ]
+    
+    fieldsets = (
+        ('Información de Notificación', {
+            'fields': (
+                'user_link', 'notification_type', 'priority',
+                'priority_display', 'title', 'message'
+            )
+        }),
+        ('Objeto Relacionado', {
+            'fields': (
+                'related_object_id', 'related_content_type',
+                'related_object_link'
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Estado', {
+            'fields': ('is_read', 'is_read_display')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def user_link(self, obj):
+        if obj.user:
+            url = reverse('admin:users_user_change', args=[obj.user.id])
+            return format_html('<a href="{}">{}</a>', url, obj.user.username)
+        return "—"
+    user_link.short_description = 'Usuario'
+    
+    def notification_type_display(self, obj):
+        type_colors = {
+            'HEALTH_ALERT': 'red',
+            'BLOCKCHAIN_TX': 'blue',
+            'IOT_ALERT': 'orange',
+            'BATCH_UPDATE': 'green',
+            'ROLE_CHANGE': 'purple',
+            'REPUTATION_UPDATE': 'teal'
+        }
+        color = type_colors.get(obj.notification_type, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, obj.get_notification_type_display()
+        )
+    notification_type_display.short_description = 'Tipo'
+    
+    def title_short(self, obj):
+        if len(obj.title) > 30:
+            return obj.title[:27] + '...'
+        return obj.title
+    title_short.short_description = 'Título'
+    
+    def priority_display(self, obj):
+        priority_colors = {
+            'LOW': 'green',
+            'MEDIUM': 'orange',
+            'HIGH': 'red',
+            'URGENT': 'darkred'
+        }
+        color = priority_colors.get(obj.priority, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, obj.get_priority_display()
+        )
+    priority_display.short_description = 'Prioridad'
+    
+    def is_read_display(self, obj):
+        if obj.is_read:
+            return format_html('<span style="color: green;">✅ Leída</span>')
+        return format_html('<span style="color: red;">❌ No Leída</span>')
+    is_read_display.short_description = 'Leída'
+    
+    def related_object_link(self, obj):
+        if obj.related_object_id and obj.related_content_type:
+            # Crear enlace según el tipo de contenido
+            if obj.related_content_type == 'animal':
+                url = reverse('admin:cattle_animal_change', args=[obj.related_object_id])
+                return format_html('<a href="{}">Animal #{}</a>', url, obj.related_object_id)
+            elif obj.related_content_type == 'batch':
+                url = reverse('admin:cattle_batch_change', args=[obj.related_object_id])
+                return format_html('<a href="{}">Lote #{}</a>', url, obj.related_object_id)
+            elif obj.related_content_type == 'health_record':
+                url = reverse('admin:cattle_animalhealthrecord_change', args=[obj.related_object_id])
+                return format_html('<a href="{}">Registro Salud #{}</a>', url, obj.related_object_id)
+        return "—"
+    related_object_link.short_description = 'Objeto Relacionado'
 
 # Configuración adicional para el admin de Users
 admin.site.site_header = "🐄 GanadoChain - User Administration"

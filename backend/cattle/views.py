@@ -6,14 +6,21 @@ from rest_framework.parsers import MultiPartParser, JSONParser
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
-from .models import Animal, AnimalHealthRecord, Batch
+from .models import Animal, AnimalHealthRecord, Batch, BlockchainEventState, CattleAuditTrail
 from .serializers import (
     AnimalSerializer, 
     AnimalHealthRecordSerializer, 
     BatchSerializer, 
     BatchCreateSerializer,
     AnimalMintSerializer,
-    HealthDataSerializer
+    HealthDataSerializer,
+    BlockchainEventStateSerializer,
+    CattleAuditTrailSerializer,
+    AnimalTransferSerializer,
+    BatchStatusUpdateSerializer,
+    AnimalHealthUpdateSerializer,
+    AnimalSearchSerializer,
+    BatchSearchSerializer
 )
 import logging
 
@@ -36,6 +43,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
         breed = self.request.query_params.get('breed', None)
         health_status = self.request.query_params.get('health_status', None)
         minted = self.request.query_params.get('minted', None)
+        batch_id = self.request.query_params.get('batch_id', None)
         
         if ear_tag:
             queryset = queryset.filter(ear_tag__icontains=ear_tag)
@@ -47,6 +55,8 @@ class AnimalViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(token_id__isnull=False)
         elif minted == 'false':
             queryset = queryset.filter(token_id__isnull=True)
+        if batch_id:
+            queryset = queryset.filter(batches__id=batch_id)
             
         return queryset
     
@@ -119,6 +129,94 @@ class AnimalViewSet(viewsets.ModelViewSet):
                 'error': f'Error minting NFT: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+    @action(detail=True, methods=['post'])
+    def transfer(self, request, pk=None):
+        """Transferir animal a nuevo dueño"""
+        animal = self.get_object()
+        
+        if animal.owner != request.user and not request.user.is_superuser:
+            return Response({
+                'error': 'No tienes permisos para transferir este animal'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = AnimalTransferSerializer(data=request.data)
+        if serializer.is_valid():
+            new_owner_wallet = serializer.validated_data['new_owner_wallet']
+            notes = serializer.validated_data.get('notes', '')
+            
+            try:
+                from blockchain.services import BlockchainService
+                service = BlockchainService()
+                result = service.transfer_animal(animal, new_owner_wallet, notes)
+                
+                if result['success']:
+                    return Response({
+                        'success': True,
+                        'message': f'Animal {animal.ear_tag} transferido exitosamente',
+                        'transaction_hash': result['tx_hash']
+                    })
+                else:
+                    return Response({
+                        'success': False,
+                        'error': result['error']
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                    
+            except Exception as e:
+                logger.error(f"Error transferring animal {pk}: {str(e)}")
+                return Response({
+                    'success': False,
+                    'error': f'Error en transferencia: {str(e)}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def update_health(self, request, pk=None):
+        """Actualizar estado de salud del animal"""
+        animal = self.get_object()
+        
+        if animal.owner != request.user and not request.user.is_superuser:
+            return Response({
+                'error': 'No tienes permisos para actualizar este animal'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = AnimalHealthUpdateSerializer(data=request.data)
+        if serializer.is_valid():
+            new_health_status = serializer.validated_data['new_health_status']
+            notes = serializer.validated_data.get('notes', '')
+            temperature = serializer.validated_data.get('temperature')
+            heart_rate = serializer.validated_data.get('heart_rate')
+            
+            try:
+                # Crear registro de salud
+                health_record = AnimalHealthRecord.objects.create(
+                    animal=animal,
+                    health_status=new_health_status,
+                    source='FARMER',
+                    notes=notes,
+                    temperature=temperature,
+                    heart_rate=heart_rate
+                )
+                
+                # Actualizar estado del animal
+                animal.health_status = new_health_status
+                animal.save()
+                
+                return Response({
+                    'success': True,
+                    'message': f'Estado de salud actualizado para {animal.ear_tag}',
+                    'health_record_id': health_record.id
+                })
+                
+            except Exception as e:
+                logger.error(f"Error updating health for animal {pk}: {str(e)}")
+                return Response({
+                    'success': False,
+                    'error': f'Error actualizando salud: {str(e)}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
     @action(detail=True, methods=['get'])
     def verify_nft(self, request, pk=None):
         try:
@@ -147,7 +245,7 @@ class AnimalViewSet(viewsets.ModelViewSet):
             return Response({
                 'success': False,
                 'error': f'Error verifying NFT: {str(e)}'
-            }, status=status.HTTP_500_INternalServerError)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['get'])
     def nft_info(self, request, pk=None):
@@ -183,6 +281,26 @@ class AnimalViewSet(viewsets.ModelViewSet):
         animal = self.get_object()
         records = animal.health_records.all().order_by('-created_at')
         serializer = AnimalHealthRecordSerializer(records, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def blockchain_events(self, request, pk=None):
+        animal = self.get_object()
+        events = animal.blockchain_events.all().order_by('-created_at')
+        
+        from blockchain.serializers import BlockchainEventSerializer
+        serializer = BlockchainEventSerializer(events, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def audit_trail(self, request, pk=None):
+        animal = self.get_object()
+        audits = CattleAuditTrail.objects.filter(
+            object_type='animal', 
+            object_id=str(animal.id)
+        ).order_by('-timestamp')
+        
+        serializer = CattleAuditTrailSerializer(audits, many=True)
         return Response(serializer.data)
 
 class AnimalHealthRecordViewSet(viewsets.ModelViewSet):
@@ -253,6 +371,43 @@ class BatchViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=self.request.user)
     
     @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        """Actualizar estado del lote"""
+        batch = self.get_object()
+        
+        if batch.created_by != request.user and not request.user.is_superuser:
+            return Response({
+                'error': 'No tienes permisos para actualizar este lote'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = BatchStatusUpdateSerializer(data=request.data)
+        if serializer.is_valid():
+            new_status = serializer.validated_data['new_status']
+            notes = serializer.validated_data.get('notes', '')
+            
+            batch.status = new_status
+            batch.save()
+            
+            # Registrar en blockchain si es necesario
+            if new_status in ['IN_TRANSIT', 'DELIVERED']:
+                try:
+                    from blockchain.services import BlockchainService
+                    service = BlockchainService()
+                    service.update_batch_status(batch, new_status, notes)
+                except Exception as e:
+                    logger.error(f"Error updating batch status on blockchain: {str(e)}")
+            
+            return Response({
+                'success': True,
+                'message': f'Estado del lote actualizado a {new_status}',
+                'batch_id': batch.id,
+                'batch_name': batch.name,
+                'new_status': new_status
+            })
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
     def add_animals(self, request, pk=None):
         batch = self.get_object()
         animal_ids = request.data.get('animal_ids', [])
@@ -305,6 +460,138 @@ class BatchViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': f'Error removiendo animales: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
+    def blockchain_events(self, request, pk=None):
+        batch = self.get_object()
+        events = batch.blockchain_events.all().order_by('-created_at')
+        
+        from blockchain.serializers import BlockchainEventSerializer
+        serializer = BlockchainEventSerializer(events, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def audit_trail(self, request, pk=None):
+        batch = self.get_object()
+        audits = CattleAuditTrail.objects.filter(
+            object_type='batch', 
+            object_id=str(batch.id)
+        ).order_by('-timestamp')
+        
+        serializer = CattleAuditTrailSerializer(audits, many=True)
+        return Response(serializer.data)
+
+class BlockchainEventStateViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = BlockchainEventStateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = BlockchainEventState.objects.all()
+        
+        if not self.request.user.is_superuser:
+            # Solo eventos relacionados con animales del usuario
+            queryset = queryset.filter(
+                Q(event__animal__owner=self.request.user) |
+                Q(event__batch__created_by=self.request.user)
+            )
+        
+        return queryset.order_by('-created_at')
+
+class CattleAuditTrailViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = CattleAuditTrailSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = CattleAuditTrail.objects.all()
+        
+        if not self.request.user.is_superuser:
+            # Solo auditorías relacionadas con el usuario
+            queryset = queryset.filter(
+                Q(user=self.request.user) |
+                Q(object_type='animal', object_id__in=Animal.objects.filter(owner=self.request.user).values_list('id', flat=True)) |
+                Q(object_type='batch', object_id__in=Batch.objects.filter(created_by=self.request.user).values_list('id', flat=True))
+            )
+        
+        object_type = self.request.query_params.get('object_type', None)
+        object_id = self.request.query_params.get('object_id', None)
+        action_type = self.request.query_params.get('action_type', None)
+        
+        if object_type:
+            queryset = queryset.filter(object_type=object_type)
+        if object_id:
+            queryset = queryset.filter(object_id=object_id)
+        if action_type:
+            queryset = queryset.filter(action_type=action_type)
+            
+        return queryset.order_by('-timestamp')
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def search_animals(request):
+    """Búsqueda avanzada de animales"""
+    serializer = AnimalSearchSerializer(data=request.data)
+    if serializer.is_valid():
+        data = serializer.validated_data
+        
+        queryset = Animal.objects.all()
+        if not request.user.is_superuser:
+            queryset = queryset.filter(owner=request.user)
+        
+        if data.get('ear_tag'):
+            queryset = queryset.filter(ear_tag__icontains=data['ear_tag'])
+        if data.get('breed'):
+            queryset = queryset.filter(breed__icontains=data['breed'])
+        if data.get('health_status'):
+            queryset = queryset.filter(health_status=data['health_status'])
+        if data.get('min_weight'):
+            queryset = queryset.filter(weight__gte=data['min_weight'])
+        if data.get('max_weight'):
+            queryset = queryset.filter(weight__lte=data['max_weight'])
+        if data.get('owner_id'):
+            queryset = queryset.filter(owner_id=data['owner_id'])
+        
+        animals = queryset.order_by('ear_tag')
+        animal_serializer = AnimalSerializer(animals, many=True)
+        
+        return Response({
+            'count': animals.count(),
+            'results': animal_serializer.data
+        })
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def search_batches(request):
+    """Búsqueda avanzada de lotes"""
+    serializer = BatchSearchSerializer(data=request.data)
+    if serializer.is_valid():
+        data = serializer.validated_data
+        
+        queryset = Batch.objects.all()
+        if not request.user.is_superuser:
+            queryset = queryset.filter(created_by=request.user)
+        
+        if data.get('name'):
+            queryset = queryset.filter(name__icontains=data['name'])
+        if data.get('status'):
+            queryset = queryset.filter(status=data['status'])
+        if data.get('created_by_id'):
+            queryset = queryset.filter(created_by_id=data['created_by_id'])
+        if data.get('min_animals'):
+            queryset = queryset.annotate(animal_count=Count('animals')).filter(animal_count__gte=data['min_animals'])
+        if data.get('max_animals'):
+            queryset = queryset.annotate(animal_count=Count('animals')).filter(animal_count__lte=data['max_animals'])
+        
+        batches = queryset.order_by('-created_at')
+        batch_serializer = BatchSerializer(batches, many=True)
+        
+        return Response({
+            'count': batches.count(),
+            'results': batch_serializer.data
+        })
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -323,7 +610,8 @@ def cattle_stats(request):
         'minted_animals': animals.filter(token_id__isnull=False).count(),
         'total_batches': batches.count(),
         'animals_by_health_status': defaultdict(int),
-        'batches_by_status': defaultdict(int)
+        'batches_by_status': defaultdict(int),
+        'animals_by_breed': defaultdict(int)
     }
     
     for status_val, count in animals.values_list('health_status').annotate(count=Count('id')):
@@ -331,5 +619,8 @@ def cattle_stats(request):
     
     for status_val, count in batches.values_list('status').annotate(count=Count('id')):
         stats['batches_by_status'][status_val] = count
+    
+    for breed, count in animals.values_list('breed').annotate(count=Count('id')):
+        stats['animals_by_breed'][breed] = count
     
     return Response(stats)

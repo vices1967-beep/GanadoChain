@@ -7,6 +7,9 @@ from django.utils.html import format_html
 import re
 import json
 
+# ✅ Importar validadores centralizados
+from core.models import validate_ethereum_address, validate_transaction_hash, validate_ipfs_hash
+
 User = get_user_model()
 
 class HealthStatus(models.TextChoices):
@@ -35,11 +38,19 @@ class Animal(models.Model):
         verbose_name="Dueño"
     )
     
-    # ✅ CAMPOS BLOCKCHAIN
-    ipfs_hash = models.CharField(max_length=255, blank=True, verbose_name="Hash IPFS")
+    # ✅ CAMPOS BLOCKCHAIN CON VALIDADORES
+    ipfs_hash = models.CharField(max_length=255, blank=True, verbose_name="Hash IPFS", 
+                               validators=[validate_ipfs_hash])
     token_id = models.BigIntegerField(null=True, blank=True, unique=True, verbose_name="Token ID NFT")
-    mint_transaction_hash = models.CharField(max_length=66, blank=True, verbose_name="Transacción de Mint")
-    nft_owner_wallet = models.CharField(max_length=42, blank=True, verbose_name="Wallet Owner NFT")
+    mint_transaction_hash = models.CharField(max_length=66, blank=True, verbose_name="Transacción de Mint",
+                                           validators=[validate_transaction_hash])
+    nft_owner_wallet = models.CharField(max_length=42, blank=True, verbose_name="Wallet Owner NFT",
+                                      validators=[validate_ethereum_address])
+    
+    # ✅ NUEVO CAMPO AÑADIDO - Relación con lote actual
+    current_batch = models.ForeignKey('Batch', on_delete=models.SET_NULL, 
+                                    null=True, blank=True, related_name='current_animals',
+                                    verbose_name="Lote Actual")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -52,6 +63,10 @@ class Animal(models.Model):
             models.Index(fields=['owner']),
             models.Index(fields=['health_status']),
             models.Index(fields=['token_id']),
+            # ✅ NUEVOS ÍNDICES AÑADIDOS
+            models.Index(fields=['health_status', 'owner']),
+            models.Index(fields=['nft_owner_wallet', 'token_id']),
+            models.Index(fields=['current_batch']),
         ]
 
     def __str__(self):
@@ -59,16 +74,8 @@ class Animal(models.Model):
     
     def clean(self):
         super().clean()
-        # Validar formato de hash de transacción
-        if self.mint_transaction_hash and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.mint_transaction_hash):
-            raise ValidationError({
-                'mint_transaction_hash': 'Formato de hash de transacción inválido.'
-            })
-        # Validar formato de wallet
-        if self.nft_owner_wallet and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.nft_owner_wallet):
-            raise ValidationError({
-                'nft_owner_wallet': 'Formato de wallet inválido.'
-            })
+        # ✅ Las validaciones ahora se manejan con los validadores centralizados
+        # Se mantiene clean() por si hay otras validaciones específicas del modelo
     
     def save(self, *args, **kwargs):
         # Normalizar hashes antes de guardar
@@ -104,6 +111,25 @@ class Animal(models.Model):
     
     def get_absolute_url(self):
         return reverse('admin:cattle_animal_change', args=[self.id])
+    
+    # ✅ NUEVO MÉTODO AÑADIDO - Para manejar cambios de lote
+    def update_current_batch(self, new_batch):
+        """
+        Actualiza el lote actual del animal y maneja la lógica de transición
+        """
+        from cattle.signals import animal_batch_changed  # Importar aquí para evitar circular imports
+        
+        old_batch = self.current_batch
+        self.current_batch = new_batch
+        self.save()
+        
+        # Disparar señal para manejar lógica adicional
+        animal_batch_changed.send(
+            sender=self.__class__,
+            animal=self,
+            old_batch=old_batch,
+            new_batch=new_batch
+        )
 
 class AnimalHealthRecord(models.Model):
     RECORD_SOURCE = [
@@ -122,9 +148,15 @@ class AnimalHealthRecord(models.Model):
     temperature = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name="Temperatura (°C)")
     heart_rate = models.IntegerField(null=True, blank=True, verbose_name="Ritmo Cardíaco (bpm)")
     movement_activity = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name="Actividad de Movimiento")
-    ipfs_hash = models.CharField(max_length=100, blank=True, verbose_name="Hash IPFS")
-    transaction_hash = models.CharField(max_length=66, blank=True, verbose_name="Hash de Transacción")
-    blockchain_hash = models.CharField(max_length=66, blank=True, null=True, verbose_name="Hash Blockchain")
+    
+    # ✅ CAMPOS BLOCKCHAIN CON VALIDADORES
+    ipfs_hash = models.CharField(max_length=100, blank=True, verbose_name="Hash IPFS",
+                               validators=[validate_ipfs_hash])
+    transaction_hash = models.CharField(max_length=66, blank=True, verbose_name="Hash de Transacción",
+                                      validators=[validate_transaction_hash])
+    blockchain_hash = models.CharField(max_length=66, blank=True, null=True, verbose_name="Hash Blockchain",
+                                     validators=[validate_transaction_hash])
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -142,15 +174,7 @@ class AnimalHealthRecord(models.Model):
     
     def clean(self):
         super().clean()
-        # Validar formato de hash de transacción
-        if self.transaction_hash and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.transaction_hash):
-            raise ValidationError({
-                'transaction_hash': 'Formato de hash de transacción inválido.'
-            })
-        if self.blockchain_hash and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.blockchain_hash):
-            raise ValidationError({
-                'blockchain_hash': 'Formato de hash blockchain inválido.'
-            })
+        # ✅ Las validaciones ahora se manejan con los validadores centralizados
     
     def save(self, *args, **kwargs):
         # Normalizar hashes antes de guardar
@@ -198,8 +222,13 @@ class Batch(models.Model):
         default='CREATED',
         verbose_name="Estado"
     )
-    ipfs_hash = models.CharField(max_length=255, blank=True, verbose_name="Hash IPFS")
-    blockchain_tx = models.CharField(max_length=66, blank=True, verbose_name="Transacción Blockchain")
+    
+    # ✅ CAMPOS BLOCKCHAIN CON VALIDADORES
+    ipfs_hash = models.CharField(max_length=255, blank=True, verbose_name="Hash IPFS",
+                               validators=[validate_ipfs_hash])
+    blockchain_tx = models.CharField(max_length=66, blank=True, verbose_name="Transacción Blockchain",
+                                   validators=[validate_transaction_hash])
+    
     created_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -230,10 +259,7 @@ class Batch(models.Model):
     
     def clean(self):
         super().clean()
-        if self.blockchain_tx and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.blockchain_tx):
-            raise ValidationError({
-                'blockchain_tx': 'Formato de hash de transacción inválido.'
-            })
+        # ✅ Las validaciones ahora se manejan con los validadores centralizados
     
     def save(self, *args, **kwargs):
         if self.blockchain_tx and not self.blockchain_tx.startswith('0x'):
@@ -256,50 +282,3 @@ class Batch(models.Model):
     
     def get_absolute_url(self):
         return reverse('admin:cattle_batch_change', args=[self.id])
-
-# Modelo para eventos IoT (si no existe una app IoT separada)
-# class IoTDevice(models.Model):
-#     DEVICE_TYPES = [
-#         ('TEMPERATURE', 'Sensor de Temperatura'),
-#         ('HEART_RATE', 'Sensor de Ritmo Cardíaco'),
-#         ('MOVEMENT', 'Sensor de Movimiento'),
-#         ('GPS', 'Sensor de Ubicación'),
-#         ('MULTI', 'Sensor Multifunción'),
-#     ]
-    
-#     DEVICE_STATUS = [
-#         ('ACTIVE', 'Activo'),
-#         ('INACTIVE', 'Inactivo'),
-#         ('MAINTENANCE', 'En Mantenimiento'),
-#         ('DISCONNECTED', 'Desconectado'),
-#     ]
-    
-#     device_id = models.CharField(max_length=100, unique=True, verbose_name="ID del Dispositivo")
-#     device_type = models.CharField(max_length=20, choices=DEVICE_TYPES, verbose_name="Tipo de Dispositivo")
-#     status = models.CharField(max_length=20, choices=DEVICE_STATUS, default='ACTIVE', verbose_name="Estado")
-#     animal = models.ForeignKey(Animal, on_delete=models.SET_NULL, null=True, blank=True, related_name='iot_devices', verbose_name="Animal Asociado")
-#     last_reading = models.DateTimeField(null=True, blank=True, verbose_name="Última Lectura")
-#     battery_level = models.IntegerField(null=True, blank=True, verbose_name="Nivel de Batería (%)")
-#     location = models.CharField(max_length=255, blank=True, verbose_name="Ubicación")
-#     created_at = models.DateTimeField(auto_now_add=True)
-#     updated_at = models.DateTimeField(auto_now=True)
-
-#     class Meta:
-#         verbose_name = "Dispositivo IoT"
-#         verbose_name_plural = "Dispositivos IoT"
-#         indexes = [
-#             models.Index(fields=['device_id']),
-#             models.Index(fields=['device_type']),
-#             models.Index(fields=['animal']),
-#             models.Index(fields=['status']),
-#         ]
-
-#     def __str__(self):
-#         return f"{self.device_id} - {self.get_device_type_display()}"
-    
-#     @property
-#     def is_active(self):
-#         return self.status == 'ACTIVE'
-    
-#     def get_absolute_url(self):
-#         return reverse('admin:cattle_iotdevice_change', args=[self.id])

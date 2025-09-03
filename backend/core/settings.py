@@ -62,14 +62,15 @@ if os.getenv('DATABASE_URL'):
 else:
     # SQLite para desarrollo
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {
-                'timeout': 20,
-            }
-        }
+    'default': {
+        'ENGINE': 'django.contrib.gis.db.backends.postgis',
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT'),
     }
+}
 
 # ==============================================================================
 # APLICACIONES Y MIDDLEWARE
@@ -96,6 +97,7 @@ INSTALLED_APPS = [
     'cattle', 
     'iot',
     'blockchain',
+    'core',  # ✅ Asegurar que core está aquí
 ]
 
 MIDDLEWARE = [
@@ -416,3 +418,9 @@ if not DEBUG:
 
 # Crear directorio static si no existe
 (BASE_DIR / 'static').mkdir(exist_ok=True)
+
+
+# Añadir al final del archivo
+INSTALLED_APPS += [
+    'django.contrib.gis',
+]

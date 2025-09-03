@@ -1,8 +1,9 @@
 from rest_framework import serializers
-from .models import IoTDevice, GPSData, HealthSensorData, DeviceEvent, DeviceConfiguration
+from .models import IoTDevice, GPSData, HealthSensorData, DeviceEvent, DeviceConfiguration, DeviceAnalytics
 from cattle.models import Animal
 from cattle.serializers import AnimalSerializer
 import re
+from decimal import Decimal
 
 class IoTDeviceSerializer(serializers.ModelSerializer):
     device_type_display = serializers.CharField(source='get_device_type_display', read_only=True)
@@ -91,7 +92,7 @@ class HealthSensorDataSerializer(serializers.ModelSerializer):
         return value
     
     def validate_temperature(self, value):
-        if value and (value < 35.0 or value > 42.0):
+        if value and (value < Decimal('35.0') or value > Decimal('42.0')):
             raise serializers.ValidationError('La temperatura debe estar entre 35.0 y 42.0 °C')
         return value
 
@@ -129,6 +130,19 @@ class DeviceConfigurationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_at', 'updated_at']
 
+class DeviceAnalyticsSerializer(serializers.ModelSerializer):
+    device_id = serializers.CharField(source='device.device_id', read_only=True)
+    device_name = serializers.CharField(source='device.name', read_only=True)
+    
+    class Meta:
+        model = DeviceAnalytics
+        fields = [
+            'id', 'device', 'device_id', 'device_name', 'date', 'total_readings',
+            'avg_battery_level', 'connectivity_uptime', 'data_quality_score',
+            'alerts_triggered', 'created_at'
+        ]
+        read_only_fields = ['created_at']
+
 class GPSDataIngestSerializer(serializers.Serializer):
     device_id = serializers.CharField(max_length=100)
     animal_ear_tag = serializers.CharField(max_length=100)
@@ -158,26 +172,26 @@ class HealthDataIngestSerializer(serializers.Serializer):
     heart_rate = serializers.IntegerField(required=False, allow_null=True, min_value=30, max_value=200)
     temperature = serializers.DecimalField(
         max_digits=5, decimal_places=2, required=False, allow_null=True,
-        min_value=35.0, max_value=42.0
+        min_value=Decimal('35.0'), max_value=Decimal('42.0')
     )
     movement_activity = serializers.DecimalField(
         max_digits=5, decimal_places=2, required=False, allow_null=True,
-        min_value=0, max_value=100
+        min_value=Decimal('0'), max_value=Decimal('100')
     )
     rumination_time = serializers.IntegerField(required=False, allow_null=True, min_value=0, max_value=1440)
     feeding_activity = serializers.DecimalField(
         max_digits=5, decimal_places=2, required=False, allow_null=True,
-        min_value=0, max_value=100
+        min_value=Decimal('0'), max_value=Decimal('100')
     )
     respiratory_rate = serializers.IntegerField(required=False, allow_null=True, min_value=5, max_value=50)
     posture = serializers.CharField(required=False, allow_blank=True, max_length=50)
     ambient_temperature = serializers.DecimalField(
         max_digits=5, decimal_places=2, required=False, allow_null=True,
-        min_value=-20, max_value=60
+        min_value=Decimal('-20'), max_value=Decimal('60')
     )
     humidity = serializers.DecimalField(
         max_digits=5, decimal_places=2, required=False, allow_null=True,
-        min_value=0, max_value=100
+        min_value=Decimal('0'), max_value=Decimal('100')
     )
     timestamp = serializers.DateTimeField(required=False)
     
@@ -219,11 +233,20 @@ class BulkDataIngestSerializer(serializers.Serializer):
 class AlertThresholdSerializer(serializers.Serializer):
     heart_rate_min = serializers.IntegerField(default=40, min_value=30, max_value=60)
     heart_rate_max = serializers.IntegerField(default=100, min_value=80, max_value=120)
-    temperature_min = serializers.DecimalField(max_digits=5, decimal_places=2, default=37.5, min_value=35.0, max_value=38.0)
-    temperature_max = serializers.DecimalField(max_digits=5, decimal_places=2, default=39.5, min_value=39.0, max_value=42.0)
+    temperature_min = serializers.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('37.5'), 
+        min_value=Decimal('35.0'), max_value=Decimal('38.0')
+    )
+    temperature_max = serializers.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('39.5'), 
+        min_value=Decimal('39.0'), max_value=Decimal('42.0')
+    )
     respiratory_rate_min = serializers.IntegerField(default=10, min_value=5, max_value=15)
     respiratory_rate_max = serializers.IntegerField(default=30, min_value=25, max_value=40)
-    movement_threshold = serializers.DecimalField(max_digits=5, decimal_places=2, default=20.0, min_value=0, max_value=100)
+    movement_threshold = serializers.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('20.0'), 
+        min_value=Decimal('0'), max_value=Decimal('100')
+    )
     battery_threshold = serializers.IntegerField(default=20, min_value=5, max_value=30)
 
 class DeviceRegistrationSerializer(serializers.Serializer):

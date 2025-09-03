@@ -66,6 +66,23 @@ graph TD
 
     Esta organización mantiene una separación clara de responsabilidades, facilita el mantenimiento y permite escalar el sistema de manera modular. Cada archivo tiene una función específica y relacionada, lo que mejora la legibilidad y el trabajo en equipo.
 
+
+backend/
+├── cattle/
+│   ├── models.py              # Modelos principales de ganado
+│   ├── blockchain_models.py   # Modelos extendidos de blockchain
+│   └── audit_models.py        # Modelos de auditoría y trazabilidad
+├── iot/
+│   ├── models.py              # Modelos principales de IoT
+│   └── analytics_models.py    # Modelos analíticos de IoT
+├── users/
+│   ├── models.py              # Modelos principales de usuarios
+│   ├── reputation_models.py   # Modelos de reputación y roles
+│   └── notification_models.py # Modelos de notificaciones
+└── core/
+    ├── models.py              # Modelos transversales del sistema
+    └── metrics_models.py      # Modelos de métricas y dashboard
+
 ```mermaid
     graph TD
     A[Users Models] --> B[Reputation Models]

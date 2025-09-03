@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from .models import IoTDevice, GPSData, HealthSensorData, DeviceEvent, DeviceConfiguration
+from .analytics_models import DeviceAnalytics
 import json
 
 @admin.register(IoTDevice)
@@ -23,7 +24,7 @@ class IoTDeviceAdmin(admin.ModelAdmin):
     
     readonly_fields = [
         'created_at', 'updated_at', 'last_reading_ago', 'battery_status',
-        'is_active', 'animal_link', 'owner_link'
+        'is_active', 'animal_link', 'owner_link', 'analytics_link'
     ]
     
     fieldsets = (
@@ -47,6 +48,10 @@ class IoTDeviceAdmin(admin.ModelAdmin):
             'fields': (
                 'last_reading', 'last_reading_ago', 'is_active'
             )
+        }),
+        ('Analítica', {
+            'fields': ('analytics_link',),
+            'classes': ('collapse',)
         }),
         ('Auditoría', {
             'fields': (
@@ -128,13 +133,18 @@ class IoTDeviceAdmin(admin.ModelAdmin):
             return timesince(obj.last_reading, timezone.now())
         return "Nunca"
     last_reading_ago.short_description = 'Última Lectura'
+    
+    def analytics_link(self, obj):
+        url = reverse('admin:iot_deviceanalytics_changelist') + f'?device__id__exact={obj.id}'
+        return format_html('<a href="{}">📊 Ver Métricas Analíticas</a>', url)
+    analytics_link.short_description = 'Analítica'
 
 @admin.register(GPSData)
 class GPSDataAdmin(admin.ModelAdmin):
     list_display = [
         'device_id', 'animal_link', 'coordinates_display',
         'accuracy_display', 'speed_display', 'timestamp',
-        'is_accurate_display', 'google_maps_link'
+        'is_accurate_display', 'google_maps_link', 'blockchain_linked_display'
     ]
     
     list_filter = [
@@ -142,12 +152,14 @@ class GPSDataAdmin(admin.ModelAdmin):
     ]
     
     search_fields = [
-        'device__device_id', 'animal__ear_tag', 'animal__breed'
+        'device__device_id', 'animal__ear_tag', 'animal__breed',
+        'blockchain_hash'
     ]
     
     readonly_fields = [
         'recorded_at', 'google_maps_link', 'is_accurate_display',
-        'device_link', 'animal_link'
+        'device_link', 'animal_link', 'blockchain_linked_display',
+        'polyscan_link'
     ]
     
     fieldsets = (
@@ -164,8 +176,14 @@ class GPSDataAdmin(admin.ModelAdmin):
         }),
         ('Metadata', {
             'fields': (
-                'timestamp', 'recorded_at', 'blockchain_hash'
+                'timestamp', 'recorded_at'
             )
+        }),
+        ('Blockchain', {
+            'fields': (
+                'blockchain_hash', 'blockchain_linked_display', 'polyscan_link'
+            ),
+            'classes': ('collapse',)
         }),
         ('Visualización', {
             'fields': (
@@ -226,13 +244,26 @@ class GPSDataAdmin(admin.ModelAdmin):
             )
         return "—"
     google_maps_link.short_description = 'Google Maps'
+    
+    def blockchain_linked_display(self, obj):
+        if obj.blockchain_hash:
+            return format_html('<span style="color: green;">✅ Sí</span>')
+        return format_html('<span style="color: red;">❌ No</span>')
+    blockchain_linked_display.short_description = 'En Blockchain'
+    
+    def polyscan_link(self, obj):
+        if obj.blockchain_hash:
+            url = f"https://amoy.polygonscan.com/tx/{obj.blockchain_hash}"
+            return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', url)
+        return "—"
+    polyscan_link.short_description = 'Transacción'
 
 @admin.register(HealthSensorData)
 class HealthSensorDataAdmin(admin.ModelAdmin):
     list_display = [
         'device_id', 'animal_link', 'temperature_display',
         'heart_rate_display', 'movement_display', 'timestamp',
-        'health_alert_display', 'has_anomalies_display'
+        'health_alert_display', 'has_anomalies_display', 'blockchain_linked_display'
     ]
     
     list_filter = [
@@ -240,12 +271,14 @@ class HealthSensorDataAdmin(admin.ModelAdmin):
     ]
     
     search_fields = [
-        'device__device_id', 'animal__ear_tag', 'animal__breed'
+        'device__device_id', 'animal__ear_tag', 'animal__breed',
+        'blockchain_hash'
     ]
     
     readonly_fields = [
         'recorded_at', 'has_anomalies_display', 'health_status_display',
-        'device_link', 'animal_link', 'anomalies_list'
+        'device_link', 'animal_link', 'anomalies_list',
+        'blockchain_linked_display', 'polyscan_link'
     ]
     
     fieldsets = (
@@ -277,7 +310,9 @@ class HealthSensorDataAdmin(admin.ModelAdmin):
             )
         }),
         ('Blockchain', {
-            'fields': ('blockchain_hash',),
+            'fields': (
+                'blockchain_hash', 'blockchain_linked_display', 'polyscan_link'
+            ),
             'classes': ('collapse',)
         }),
     )
@@ -361,6 +396,19 @@ class HealthSensorDataAdmin(admin.ModelAdmin):
                               ''.join(f'<li>{anom.replace("_", " ").title()}</li>' for anom in anomalies))
         return "No hay anomalías"
     anomalies_list.short_description = 'Anomalías Detectadas'
+    
+    def blockchain_linked_display(self, obj):
+        if obj.blockchain_hash:
+            return format_html('<span style="color: green;">✅ Sí</span>')
+        return format_html('<span style="color: red;">❌ No</span>')
+    blockchain_linked_display.short_description = 'En Blockchain'
+    
+    def polyscan_link(self, obj):
+        if obj.blockchain_hash:
+            url = f"https://amoy.polygonscan.com/tx/{obj.blockchain_hash}"
+            return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', url)
+        return "—"
+    polyscan_link.short_description = 'Transacción'
 
 @admin.register(DeviceEvent)
 class DeviceEventAdmin(admin.ModelAdmin):
@@ -536,6 +584,99 @@ class DeviceConfigurationAdmin(admin.ModelAdmin):
         return format_html('<pre style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">{}</pre>', 
                           json.dumps(obj.alert_thresholds, indent=2, ensure_ascii=False))
     alert_thresholds_prettified.short_description = 'Umbrales (Formateados)'
+
+@admin.register(DeviceAnalytics)
+class DeviceAnalyticsAdmin(admin.ModelAdmin):
+    list_display = [
+        'device_id', 'date', 'total_readings', 'avg_battery_level_display',
+        'connectivity_uptime_display', 'data_quality_score_display',
+        'alerts_triggered'
+    ]
+    
+    list_filter = [
+        'date', 'device__device_type'
+    ]
+    
+    search_fields = [
+        'device__device_id', 'device__name'
+    ]
+    
+    readonly_fields = [
+        'created_at', 'device_link', 'data_quality_status'
+    ]
+    
+    fieldsets = (
+        ('Información Básica', {
+            'fields': (
+                'device_link', 'date'
+            )
+        }),
+        ('Métricas de Rendimiento', {
+            'fields': (
+                'total_readings', 'avg_battery_level', 'connectivity_uptime',
+                'data_quality_score', 'data_quality_status'
+            )
+        }),
+        ('Alertas y Eventos', {
+            'fields': ('alerts_triggered',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def device_id(self, obj):
+        return obj.device.device_id
+    device_id.short_description = 'Dispositivo'
+    
+    def device_link(self, obj):
+        if obj.device:
+            url = reverse('admin:iot_iotdevice_change', args=[obj.device.id])
+            return format_html('<a href="{}">{}</a>', url, obj.device.device_id)
+        return "—"
+    device_link.short_description = 'Dispositivo'
+    
+    def avg_battery_level_display(self, obj):
+        if obj.avg_battery_level:
+            color = 'green' if obj.avg_battery_level > 70 else 'orange' if obj.avg_battery_level > 30 else 'red'
+            return format_html(
+                '<span style="color: {};">{}%</span>',
+                color, round(obj.avg_battery_level, 1)
+            )
+        return "—"
+    avg_battery_level_display.short_description = 'Batería Promedio'
+    
+    def connectivity_uptime_display(self, obj):
+        if obj.connectivity_uptime:
+            color = 'green' if obj.connectivity_uptime > 95 else 'orange' if obj.connectivity_uptime > 80 else 'red'
+            return format_html(
+                '<span style="color: {};">{}%</span>',
+                color, round(obj.connectivity_uptime, 1)
+            )
+        return "—"
+    connectivity_uptime_display.short_description = 'Disponibilidad'
+    
+    def data_quality_score_display(self, obj):
+        if obj.data_quality_score:
+            color = 'green' if obj.data_quality_score > 90 else 'orange' if obj.data_quality_score > 70 else 'red'
+            return format_html(
+                '<span style="color: {};">{}/100</span>',
+                color, round(obj.data_quality_score, 1)
+            )
+        return "—"
+    data_quality_score_display.short_description = 'Calidad Datos'
+    
+    def data_quality_status(self, obj):
+        if obj.data_quality_score:
+            if obj.data_quality_score > 90:
+                return format_html('<span style="color: green;">✅ Excelente</span>')
+            elif obj.data_quality_score > 70:
+                return format_html('<span style="color: orange;">⚠️ Aceptable</span>')
+            else:
+                return format_html('<span style="color: red;">❌ Pobre</span>')
+        return "—"
+    data_quality_status.short_description = 'Estado Calidad'
 
 # Configuración adicional para el admin de IoT
 admin.site.site_header = "🐄 GanadoChain - IoT Administration"

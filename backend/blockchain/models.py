@@ -5,6 +5,9 @@ from django.urls import reverse
 import re
 import json
 
+# ✅ Importar validadores centralizados
+from core.models import validate_ethereum_address, validate_transaction_hash
+
 class BlockchainEvent(models.Model):
     EVENT_TYPES = [
         ('MINT', 'NFT Minted'),
@@ -19,12 +22,23 @@ class BlockchainEvent(models.Model):
     ]
     
     event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
-    transaction_hash = models.CharField(max_length=66)
+    transaction_hash = models.CharField(
+        max_length=66, 
+        validators=[validate_transaction_hash]  # ✅ VALIDADOR AÑADIDO
+    )
     block_number = models.BigIntegerField()
     animal = models.ForeignKey('cattle.Animal', on_delete=models.CASCADE, null=True, blank=True)
     batch = models.ForeignKey('cattle.Batch', on_delete=models.CASCADE, null=True, blank=True)
-    from_address = models.CharField(max_length=42, blank=True)
-    to_address = models.CharField(max_length=42, blank=True)
+    from_address = models.CharField(
+        max_length=42, 
+        blank=True,
+        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
+    )
+    to_address = models.CharField(
+        max_length=42, 
+        blank=True,
+        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
+    )
     metadata = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -44,20 +58,8 @@ class BlockchainEvent(models.Model):
 
     def clean(self):
         super().clean()
-        # Validar formato del hash de transacción
-        if self.transaction_hash and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.transaction_hash):
-            raise ValidationError({
-                'transaction_hash': 'Formato de hash de transacción inválido. Debe ser 64 caracteres hexadecimales.'
-            })
-        # Validar formato de addresses
-        if self.from_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.from_address):
-            raise ValidationError({
-                'from_address': 'Formato de dirección from inválido.'
-            })
-        if self.to_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.to_address):
-            raise ValidationError({
-                'to_address': 'Formato de dirección to inválido.'
-            })
+        # ✅ Las validaciones ahora se manejan con los validadores centralizados
+        # Se mantiene clean() por si hay otras validaciones específicas del modelo
 
     def save(self, *args, **kwargs):
         # Normalizar hashes antes de guardar
@@ -127,10 +129,20 @@ class ContractInteraction(models.Model):
     
     contract_type = models.CharField(max_length=10, choices=CONTRACT_TYPES)
     action_type = models.CharField(max_length=15, choices=ACTION_TYPES)
-    transaction_hash = models.CharField(max_length=66)
+    transaction_hash = models.CharField(
+        max_length=66,
+        validators=[validate_transaction_hash]  # ✅ VALIDADOR AÑADIDO
+    )
     block_number = models.BigIntegerField()
-    caller_address = models.CharField(max_length=42)
-    target_address = models.CharField(max_length=42, blank=True)
+    caller_address = models.CharField(
+        max_length=42,
+        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
+    )
+    target_address = models.CharField(
+        max_length=42, 
+        blank=True,
+        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
+    )
     parameters = models.JSONField(default=dict)
     gas_used = models.BigIntegerField(null=True, blank=True)
     gas_price = models.BigIntegerField(null=True, blank=True)
@@ -159,12 +171,7 @@ class ContractInteraction(models.Model):
 
     def clean(self):
         super().clean()
-        if self.transaction_hash and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.transaction_hash):
-            raise ValidationError({'transaction_hash': 'Hash de transacción inválido'})
-        if self.caller_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.caller_address):
-            raise ValidationError({'caller_address': 'Dirección caller inválida'})
-        if self.target_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.target_address):
-            raise ValidationError({'target_address': 'Dirección target inválida'})
+        # ✅ Las validaciones ahora se manejan con los validadores centralizados
 
     def save(self, *args, **kwargs):
         # Normalizar addresses
@@ -275,21 +282,43 @@ class SmartContract(models.Model):
     
     name = models.CharField(max_length=100)
     contract_type = models.CharField(max_length=10, choices=CONTRACT_TYPES)
-    address = models.CharField(max_length=42, unique=True)
+    address = models.CharField(
+        max_length=42, 
+        unique=True,
+        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
+    )
     abi = models.JSONField()
     version = models.CharField(max_length=20, default='1.0.0')
     is_active = models.BooleanField(default=True)
     deployment_block = models.BigIntegerField()
-    deployment_tx_hash = models.CharField(max_length=66)
-    deployer_address = models.CharField(max_length=42)
+    deployment_tx_hash = models.CharField(
+        max_length=66,
+        validators=[validate_transaction_hash]  # ✅ VALIDADOR AÑADIDO
+    )
+    deployer_address = models.CharField(
+        max_length=42,
+        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     # Información adicional
-    implementation_address = models.CharField(max_length=42, blank=True)
-    proxy_address = models.CharField(max_length=42, blank=True)
+    implementation_address = models.CharField(
+        max_length=42, 
+        blank=True,
+        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
+    )
+    proxy_address = models.CharField(
+        max_length=42, 
+        blank=True,
+        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
+    )
     is_upgradeable = models.BooleanField(default=False)
-    admin_address = models.CharField(max_length=42, blank=True)
+    admin_address = models.CharField(
+        max_length=42, 
+        blank=True,
+        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
+    )
 
     class Meta:
         verbose_name = "Contrato Inteligente"
@@ -305,18 +334,7 @@ class SmartContract(models.Model):
 
     def clean(self):
         super().clean()
-        if self.address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.address):
-            raise ValidationError({'address': 'Dirección de contrato inválida'})
-        if self.deployment_tx_hash and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.deployment_tx_hash):
-            raise ValidationError({'deployment_tx_hash': 'Hash de deployment inválido'})
-        if self.deployer_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.deployer_address):
-            raise ValidationError({'deployer_address': 'Dirección de deployer inválida'})
-        if self.implementation_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.implementation_address):
-            raise ValidationError({'implementation_address': 'Dirección de implementación inválida'})
-        if self.proxy_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.proxy_address):
-            raise ValidationError({'proxy_address': 'Dirección de proxy inválida'})
-        if self.admin_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.admin_address):
-            raise ValidationError({'admin_address': 'Dirección de admin inválida'})
+        # ✅ Las validaciones ahora se manejan con los validadores centralizados
 
     def save(self, *args, **kwargs):
         # Normalizar addresses
@@ -388,7 +406,11 @@ class GasPriceHistory(models.Model):
 
 class TransactionPool(models.Model):
     """Pool de transacciones pendientes"""
-    transaction_hash = models.CharField(max_length=66, unique=True)
+    transaction_hash = models.CharField(
+        max_length=66, 
+        unique=True,
+        validators=[validate_transaction_hash]  # ✅ VALIDADOR AÑADIDO
+    )
     raw_transaction = models.TextField()
     status = models.CharField(max_length=10, choices=[
         ('PENDING', 'Pending'),
@@ -414,8 +436,7 @@ class TransactionPool(models.Model):
 
     def clean(self):
         super().clean()
-        if self.transaction_hash and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', self.transaction_hash):
-            raise ValidationError({'transaction_hash': 'Hash de transacción inválido'})
+        # ✅ Las validaciones ahora se manejan con los validadores centralizados
 
     def save(self, *args, **kwargs):
         if self.transaction_hash and not self.transaction_hash.startswith('0x'):

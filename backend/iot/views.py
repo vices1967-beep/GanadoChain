@@ -5,18 +5,20 @@ from rest_framework.views import APIView
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, Count, Avg, Max, Min
-from .models import IoTDevice, GPSData, HealthSensorData, DeviceEvent, DeviceConfiguration
+from .models import IoTDevice, GPSData, HealthSensorData, DeviceEvent, DeviceConfiguration, DeviceAnalytics
 from .serializers import (
     IoTDeviceSerializer, GPSDataSerializer, 
     HealthSensorDataSerializer, DeviceEventSerializer,
     DeviceConfigurationSerializer, IoTDataIngestSerializer,
     GPSDataIngestSerializer, HealthDataIngestSerializer,
     DeviceStatusUpdateSerializer, BulkDataIngestSerializer,
-    DeviceRegistrationSerializer, AlertThresholdSerializer
+    DeviceRegistrationSerializer, AlertThresholdSerializer,
+    DeviceAnalyticsSerializer
 )
 from .permissions import IsDeviceOwner, IsIoTDevice
 from cattle.models import Animal
 import logging
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -100,22 +102,69 @@ class IoTDeviceViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
+    def analytics(self, request, pk=None):
+        """Obtener analytics del dispositivo"""
+        device = self.get_object()
+        analytics = device.analytics.all().order_by('-date')
+        serializer = DeviceAnalyticsSerializer(analytics, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
     def stats(self, request, pk=None):
         """Estadísticas del dispositivo"""
         device = self.get_object()
         
+        # Calcular métricas básicas
+        gps_count = device.gps_data.count()
+        health_count = device.health_data.count()
+        events_count = device.events.count()
+        
+        # Calcular uptime
+        uptime_seconds = (timezone.now() - device.created_at).total_seconds() if device.created_at else 0
+        
+        # Obtener analytics recientes
+        recent_analytics = device.analytics.order_by('-date').first()
+        
         stats = {
-            'gps_data_count': device.gps_data.count(),
-            'health_data_count': device.health_data.count(),
-            'events_count': device.events.count(),
+            'gps_data_count': gps_count,
+            'health_data_count': health_count,
+            'events_count': events_count,
             'last_gps_data': device.gps_data.order_by('-timestamp').first(),
             'last_health_data': device.health_data.order_by('-timestamp').first(),
             'battery_level': device.battery_level,
             'status': device.status,
-            'uptime': (timezone.now() - device.created_at).total_seconds() if device.created_at else 0
+            'uptime_days': uptime_seconds / 86400,  # Convertir a días
+            'data_quality_score': recent_analytics.data_quality_score if recent_analytics else 0,
+            'connectivity_uptime': recent_analytics.connectivity_uptime if recent_analytics else 0,
+            'avg_battery_level': recent_analytics.avg_battery_level if recent_analytics else 0
         }
         
         return Response(stats)
+    
+    @action(detail=True, methods=['post'])
+    def update_configuration(self, request, pk=None):
+        """Actualizar configuración del dispositivo"""
+        device = self.get_object()
+        
+        try:
+            config = device.configuration
+            serializer = DeviceConfigurationSerializer(config, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    'success': True,
+                    'message': 'Configuración actualizada',
+                    'configuration': serializer.data
+                })
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        except DeviceConfiguration.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Configuración no encontrada'
+            }, status=status.HTTP_404_NOT_FOUND)
 
 class GPSDataViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = GPSDataSerializer
@@ -159,6 +208,38 @@ class GPSDataViewSet(viewsets.ReadOnlyModelViewSet):
         data = GPSData.objects.filter(animal=animal).order_by('timestamp')
         serializer = self.get_serializer(data, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def geo_fence(self, request):
+        """Datos GPS para geofencing"""
+        from django.contrib.gis.geos import Point
+        from django.contrib.gis.db.models.functions import Distance
+        
+        lat = request.query_params.get('lat')
+        lng = request.query_params.get('lng')
+        radius = request.query_params.get('radius', 10)  # km
+        
+        if not lat or not lng:
+            return Response({
+                'error': 'Se requieren parámetros lat y lng'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            center_point = Point(float(lng), float(lat))
+            queryset = GPSData.objects.filter(
+                animal__owner=request.user,
+                timestamp__gte=timezone.now() - timezone.timedelta(hours=24)
+            ).annotate(
+                distance=Distance('location_point', center_point)
+            ).filter(distance__lte=radius * 1000)  # Convertir km a metros
+            
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+            
+        except ValueError:
+            return Response({
+                'error': 'Parámetros lat y lng inválidos'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 class HealthSensorDataViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = HealthSensorDataSerializer
@@ -173,6 +254,7 @@ class HealthSensorDataViewSet(viewsets.ReadOnlyModelViewSet):
         date_from = self.request.query_params.get('date_from', None)
         date_to = self.request.query_params.get('date_to', None)
         has_alerts = self.request.query_params.get('has_alerts', None)
+        health_status = self.request.query_params.get('health_status', None)
         
         if device_id:
             queryset = queryset.filter(device__device_id=device_id)
@@ -184,6 +266,8 @@ class HealthSensorDataViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(timestamp__lte=date_to)
         if has_alerts == 'true':
             queryset = queryset.filter(health_alert=True)
+        if health_status:
+            queryset = queryset.filter(health_status=health_status)
             
         return queryset.order_by('-timestamp')
     
@@ -201,19 +285,44 @@ class HealthSensorDataViewSet(viewsets.ReadOnlyModelViewSet):
         animal = get_object_or_404(Animal, id=animal_id, owner=request.user)
         data = HealthSensorData.objects.filter(animal=animal).order_by('-timestamp')
         
-        # Estadísticas
-        stats = {
-            'total_readings': data.count(),
-            'avg_heart_rate': data.aggregate(avg=Avg('heart_rate'))['avg'],
-            'avg_temperature': data.aggregate(avg=Avg('temperature'))['avg'],
-            'alerts_count': data.filter(health_alert=True).count(),
-            'last_reading': data.first().timestamp if data.exists() else None
-        }
+        # Estadísticas detalladas
+        stats = data.aggregate(
+            total_readings=Count('id'),
+            avg_heart_rate=Avg('heart_rate'),
+            avg_temperature=Avg('temperature'),
+            avg_movement=Avg('movement_activity'),
+            max_heart_rate=Max('heart_rate'),
+            min_heart_rate=Min('heart_rate'),
+            max_temperature=Max('temperature'),
+            min_temperature=Min('temperature'),
+            alerts_count=Count('id', filter=Q(health_alert=True))
+        )
         
         serializer = self.get_serializer(data, many=True)
         return Response({
             'data': serializer.data,
-            'stats': stats
+            'stats': stats,
+            'animal': {
+                'id': animal.id,
+                'ear_tag': animal.ear_tag,
+                'breed': animal.breed,
+                'health_status': animal.health_status
+            }
+        })
+    
+    @action(detail=False, methods=['get'])
+    def health_alerts(self, request):
+        """Alertas de salud recientes"""
+        alerts = HealthSensorData.objects.filter(
+            animal__owner=request.user,
+            health_alert=True,
+            timestamp__gte=timezone.now() - timezone.timedelta(days=7)
+        ).order_by('-timestamp')
+        
+        serializer = self.get_serializer(alerts, many=True)
+        return Response({
+            'count': alerts.count(),
+            'alerts': serializer.data
         })
 
 class DeviceEventViewSet(viewsets.ReadOnlyModelViewSet):
@@ -247,6 +356,95 @@ class DeviceEventViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(timestamp__lte=date_to)
             
         return queryset.order_by('-timestamp')
+    
+    @action(detail=True, methods=['post'])
+    def resolve(self, request, pk=None):
+        """Marcar evento como resuelto"""
+        event = self.get_object()
+        
+        if event.resolved:
+            return Response({
+                'error': 'El evento ya está resuelto'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        event.resolved = True
+        event.resolved_at = timezone.now()
+        event.resolved_by = request.user
+        event.save()
+        
+        serializer = self.get_serializer(event)
+        return Response({
+            'success': True,
+            'message': 'Evento marcado como resuelto',
+            'event': serializer.data
+        })
+    
+    @action(detail=False, methods=['get'])
+    def unresolved(self, request):
+        """Eventos no resueltos"""
+        unresolved_events = DeviceEvent.objects.filter(
+            device__owner=request.user,
+            resolved=False
+        ).order_by('-timestamp')
+        
+        serializer = self.get_serializer(unresolved_events, many=True)
+        return Response({
+            'count': unresolved_events.count(),
+            'events': serializer.data
+        })
+
+class DeviceConfigurationViewSet(viewsets.ModelViewSet):
+    serializer_class = DeviceConfigurationSerializer
+    permission_classes = [permissions.IsAuthenticated, IsDeviceOwner]
+    
+    def get_queryset(self):
+        return DeviceConfiguration.objects.filter(device__owner=self.request.user)
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+class DeviceAnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = DeviceAnalyticsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = DeviceAnalytics.objects.filter(device__owner=self.request.user)
+        
+        # Filtros
+        device_id = self.request.query_params.get('device_id', None)
+        date_from = self.request.query_params.get('date_from', None)
+        date_to = self.request.query_params.get('date_to', None)
+        
+        if device_id:
+            queryset = queryset.filter(device__device_id=device_id)
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+            
+        return queryset.order_by('-date')
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Resumen de analytics"""
+        from django.db.models import Avg, Sum
+        
+        summary = DeviceAnalytics.objects.filter(
+            device__owner=request.user,
+            date__gte=timezone.now().date() - timezone.timedelta(days=30)
+        ).aggregate(
+            avg_data_quality=Avg('data_quality_score'),
+            avg_connectivity=Avg('connectivity_uptime'),
+            total_alerts=Sum('alerts_triggered'),
+            total_readings=Sum('total_readings')
+        )
+        
+        return Response({
+            'period': 'last_30_days',
+            'summary': summary
+        })
 
 class IoTDataIngestView(APIView):
     permission_classes = [IsIoTDevice]
@@ -442,20 +640,73 @@ class DeviceRegistrationView(APIView):
 
 class IoTStatsView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = None  # Esta vista no usa serializer
     
     def get(self, request):
+        user_devices = IoTDevice.objects.filter(owner=request.user)
+        
         stats = {
-            'total_devices': IoTDevice.objects.filter(owner=request.user).count(),
-            'active_devices': IoTDevice.objects.filter(owner=request.user, status='ACTIVE').count(),
+            'total_devices': user_devices.count(),
+            'active_devices': user_devices.filter(status='ACTIVE').count(),
+            'inactive_devices': user_devices.filter(status='INACTIVE').count(),
+            'maintenance_devices': user_devices.filter(status='MAINTENANCE').count(),
             'total_gps_data': GPSData.objects.filter(animal__owner=request.user).count(),
             'total_health_data': HealthSensorData.objects.filter(animal__owner=request.user).count(),
             'health_alerts': HealthSensorData.objects.filter(animal__owner=request.user, health_alert=True).count(),
-            'devices_by_type': dict(IoTDevice.objects.filter(owner=request.user)
-                                  .values_list('device_type')
-                                  .annotate(count=Count('id'))),
-            'recent_events': DeviceEvent.objects.filter(device__owner=request.user)
-                              .order_by('-timestamp')[:5].count()
+            'unresolved_events': DeviceEvent.objects.filter(device__owner=request.user, resolved=False).count(),
+            'devices_by_type': dict(user_devices.values_list('device_type').annotate(count=Count('id'))),
+            'recent_activity': DeviceEvent.objects.filter(device__owner=request.user)
+                              .order_by('-timestamp')[:5].count(),
+            'avg_battery_level': user_devices.aggregate(avg=Avg('battery_level'))['avg'] or 0,
+            'low_battery_devices': user_devices.filter(battery_level__lt=20).count()
         }
         
         return Response(stats)
+
+class AlertThresholdView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, device_id):
+        """Actualizar umbrales de alerta para un dispositivo"""
+        device = get_object_or_404(IoTDevice, device_id=device_id, owner=request.user)
+        
+        try:
+            config = device.configuration
+            serializer = AlertThresholdSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                # Actualizar los umbrales en la configuración
+                config.alert_thresholds = serializer.validated_data
+                config.save()
+                
+                return Response({
+                    'success': True,
+                    'message': 'Umbrales de alerta actualizados',
+                    'device_id': device.device_id,
+                    'thresholds': config.alert_thresholds
+                })
+            
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        except DeviceConfiguration.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Configuración no encontrada'
+            }, status=status.HTTP_404_NOT_FOUND)
+    
+    def get(self, request, device_id):
+        """Obtener umbrales de alerta de un dispositivo"""
+        device = get_object_or_404(IoTDevice, device_id=device_id, owner=request.user)
+        
+        try:
+            config = device.configuration
+            return Response({
+                'success': True,
+                'device_id': device.device_id,
+                'thresholds': config.alert_thresholds
+            })
+            
+        except DeviceConfiguration.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': 'Configuración no encontrada'
+            }, status=status.HTTP_404_NOT_FOUND)

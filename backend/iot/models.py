@@ -5,6 +5,9 @@ from django.urls import reverse
 from django.utils.html import format_html
 import re
 
+# ✅ Importar validadores centralizados
+from core.models import validate_transaction_hash
+
 User = get_user_model()
 
 class IoTDevice(models.Model):
@@ -105,7 +108,15 @@ class GPSData(models.Model):
     hdop = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True, verbose_name="HDOP")
     timestamp = models.DateTimeField(verbose_name="Timestamp del Dispositivo")
     recorded_at = models.DateTimeField(auto_now_add=True, verbose_name="Registrado el")
-    blockchain_hash = models.CharField(max_length=66, blank=True, null=True, verbose_name="Hash Blockchain")
+    
+    # ✅ CAMPO BLOCKCHAIN CON VALIDADOR
+    blockchain_hash = models.CharField(
+        max_length=66, 
+        blank=True, 
+        null=True, 
+        verbose_name="Hash Blockchain",
+        validators=[validate_transaction_hash]  # ✅ VALIDADOR AÑADIDO
+    )
 
     class Meta:
         verbose_name = "Datos GPS"
@@ -134,6 +145,12 @@ class GPSData(models.Model):
             raise ValidationError({'latitude': 'La latitud debe estar entre -90 y 90'})
         if self.longitude < -180 or self.longitude > 180:
             raise ValidationError({'longitude': 'La longitud debe estar entre -180 y 180'})
+    
+    def save(self, *args, **kwargs):
+        # Normalizar hash antes de guardar
+        if self.blockchain_hash and not self.blockchain_hash.startswith('0x'):
+            self.blockchain_hash = '0x' + self.blockchain_hash
+        super().save(*args, **kwargs)
 
 class HealthSensorData(models.Model):
     device = models.ForeignKey(IoTDevice, on_delete=models.CASCADE, related_name='health_data', verbose_name="Dispositivo")
@@ -149,7 +166,15 @@ class HealthSensorData(models.Model):
     humidity = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, verbose_name="Humedad (%)")
     timestamp = models.DateTimeField(verbose_name="Timestamp del Dispositivo")
     recorded_at = models.DateTimeField(auto_now_add=True, verbose_name="Registrado el")
-    blockchain_hash = models.CharField(max_length=66, blank=True, null=True, verbose_name="Hash Blockchain")
+    
+    # ✅ CAMPO BLOCKCHAIN CON VALIDADOR
+    blockchain_hash = models.CharField(
+        max_length=66, 
+        blank=True, 
+        null=True, 
+        verbose_name="Hash Blockchain",
+        validators=[validate_transaction_hash]  # ✅ VALIDADOR AÑADIDO
+    )
     processed = models.BooleanField(default=False, verbose_name="Procesado")
     health_alert = models.BooleanField(default=False, verbose_name="Alerta de Salud")
 
@@ -194,6 +219,12 @@ class HealthSensorData(models.Model):
             return HealthStatus.UNDER_OBSERVATION
         else:
             return HealthStatus.HEALTHY
+    
+    def save(self, *args, **kwargs):
+        # Normalizar hash antes de guardar
+        if self.blockchain_hash and not self.blockchain_hash.startswith('0x'):
+            self.blockchain_hash = '0x' + self.blockchain_hash
+        super().save(*args, **kwargs)
 
 class DeviceEvent(models.Model):
     EVENT_TYPES = [

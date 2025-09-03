@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from .models import Animal, AnimalHealthRecord, Batch
+from .models import Animal, AnimalHealthRecord, Batch, BlockchainEventState, CattleAuditTrail
 from django.contrib.auth import get_user_model
+from decimal import Decimal
 
 User = get_user_model()
 
@@ -12,6 +13,7 @@ class AnimalSerializer(serializers.ModelSerializer):
     metadata_uri = serializers.CharField(read_only=True)
     polyscan_url = serializers.CharField(read_only=True)
     age = serializers.SerializerMethodField(read_only=True)
+    current_batch_name = serializers.CharField(source='current_batch.name', read_only=True, allow_null=True)
     
     class Meta:
         model = Animal
@@ -19,8 +21,8 @@ class AnimalSerializer(serializers.ModelSerializer):
             'id', 'ear_tag', 'breed', 'birth_date', 'weight', 'health_status', 
             'health_status_display', 'location', 'owner', 'owner_email', 'owner_name',
             'ipfs_hash', 'token_id', 'mint_transaction_hash', 'nft_owner_wallet',
-            'is_minted', 'metadata_uri', 'polyscan_url', 'age',
-            'created_at', 'updated_at'
+            'current_batch', 'current_batch_name', 'is_minted', 'metadata_uri', 
+            'polyscan_url', 'age', 'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at', 'is_minted', 'metadata_uri', 'polyscan_url']
     
@@ -109,7 +111,7 @@ class BatchCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Batch
         fields = ['name', 'animals', 'origin', 'destination', 'status', 'created_by']
-        ref_name = 'CattleBatchCreateSerializer'  # ← Añadir esta línea
+        ref_name = 'CattleBatchCreateSerializer'
     
     def validate_animals(self, value):
         if value:
@@ -131,14 +133,124 @@ class AnimalMintSerializer(serializers.Serializer):
 class HealthDataSerializer(serializers.Serializer):
     device_id = serializers.CharField(max_length=100)
     animal_ear_tag = serializers.CharField(max_length=100)
-    temperature = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
-    heart_rate = serializers.IntegerField(required=False)
-    movement_activity = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    temperature = serializers.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        required=False,
+        min_value=Decimal('35.0'),
+        max_value=Decimal('42.0')
+    )
+    heart_rate = serializers.IntegerField(
+        required=False,
+        min_value=30,
+        max_value=200
+    )
+    movement_activity = serializers.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        required=False,
+        min_value=Decimal('0'),
+        max_value=Decimal('100')
+    )
     timestamp = serializers.DateTimeField(required=False)
-    battery_level = serializers.IntegerField(required=False, min_value=0, max_value=100)
+    battery_level = serializers.IntegerField(
+        required=False, 
+        min_value=0, 
+        max_value=100
+    )
     
     def validate(self, data):
         health_fields = ['temperature', 'heart_rate', 'movement_activity']
         if not any(field in data for field in health_fields):
             raise serializers.ValidationError('Al menos un dato de salud (temperature, heart_rate, movement_activity) debe ser proporcionado.')
         return data
+
+class BlockchainEventStateSerializer(serializers.ModelSerializer):
+    event_details = serializers.CharField(source='event.__str__', read_only=True)
+    state_display = serializers.CharField(source='get_state_display', read_only=True)
+    
+    class Meta:
+        model = BlockchainEventState
+        fields = [
+            'id', 'event', 'event_details', 'state', 'state_display', 
+            'confirmation_blocks', 'block_confirmed', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+class CattleAuditTrailSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True, allow_null=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True, allow_null=True)
+    action_type_display = serializers.CharField(source='get_action_type_display', read_only=True)
+    
+    class Meta:
+        model = CattleAuditTrail
+        fields = [
+            'id', 'object_type', 'object_id', 'action_type', 'action_type_display',
+            'user', 'user_name', 'user_email', 'previous_state', 'new_state',
+            'changes', 'ip_address', 'blockchain_tx_hash', 'timestamp'
+        ]
+        read_only_fields = ['timestamp']
+
+class AnimalTransferSerializer(serializers.Serializer):
+    animal_id = serializers.IntegerField(min_value=1)
+    new_owner_wallet = serializers.CharField(max_length=42)
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    
+    def validate_new_owner_wallet(self, value):
+        import re
+        if not re.match(r'^(0x)?[0-9a-fA-F]{40}$', value):
+            raise serializers.ValidationError('Formato de wallet inválido.')
+        return value
+
+class BatchStatusUpdateSerializer(serializers.Serializer):
+    batch_id = serializers.IntegerField(min_value=1)
+    new_status = serializers.ChoiceField(choices=Batch.BATCH_STATUS_CHOICES)
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+class AnimalHealthUpdateSerializer(serializers.Serializer):
+    animal_id = serializers.IntegerField(min_value=1)
+    new_health_status = serializers.ChoiceField(choices=Animal.HealthStatus.choices)
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    temperature = serializers.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        required=False,
+        min_value=Decimal('35.0'),
+        max_value=Decimal('42.0')
+    )
+    heart_rate = serializers.IntegerField(
+        required=False,
+        min_value=30,
+        max_value=200
+    )
+
+class AnimalSearchSerializer(serializers.Serializer):
+    ear_tag = serializers.CharField(required=False, max_length=100)
+    breed = serializers.CharField(required=False, max_length=100)
+    health_status = serializers.ChoiceField(
+        required=False, 
+        choices=Animal.HealthStatus.choices
+    )
+    min_weight = serializers.DecimalField(
+        required=False, 
+        max_digits=6, 
+        decimal_places=2,
+        min_value=Decimal('0')
+    )
+    max_weight = serializers.DecimalField(
+        required=False, 
+        max_digits=6, 
+        decimal_places=2,
+        min_value=Decimal('0')
+    )
+    owner_id = serializers.IntegerField(required=False, min_value=1)
+
+class BatchSearchSerializer(serializers.Serializer):
+    name = serializers.CharField(required=False, max_length=100)
+    status = serializers.ChoiceField(
+        required=False, 
+        choices=Batch.BATCH_STATUS_CHOICES
+    )
+    created_by_id = serializers.IntegerField(required=False, min_value=1)
+    min_animals = serializers.IntegerField(required=False, min_value=0)
+    max_animals = serializers.IntegerField(required=False, min_value=0)

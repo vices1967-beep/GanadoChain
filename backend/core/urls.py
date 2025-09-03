@@ -13,6 +13,9 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework import permissions
 
+# Importar vistas de core
+from . import views
+
 # Configuración de Swagger/OpenAPI
 schema_view = get_schema_view(
     openapi.Info(
@@ -38,6 +41,13 @@ def home(request):
             'api_root': '/api/'
         },
         'endpoints': {
+            'core': {
+                'health': '/api/core/health/',
+                'info': '/api/core/info/',
+                'config': '/api/core/config/',
+                'metrics': '/api/core/metrics/',
+                'dashboard': '/api/core/dashboard/stats/'
+            },
             'auth': {
                 'login': '/api/auth/login/',
                 'register': '/api/auth/register/',
@@ -83,15 +93,38 @@ urlpatterns = [
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     path('swagger.json/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
     
-    # API Routes
+    # Core API Routes (NUEVAS)
+    path('api/core/', include([
+        # Health check e información
+        path('health/', views.HealthCheckView.as_view(), name='health-check'),
+        path('info/', views.APIInfoView.as_view(), name='api-info'),
+        path('config/', views.SystemConfigView.as_view(), name='system-config'),
+        
+        # Dashboard y estadísticas
+        path('dashboard/stats/', views.DashboardStatsView.as_view(), name='dashboard-stats'),
+        
+        # Métricas del sistema
+        path('metrics/', include([
+            path('', views.SystemMetricsViewSet.as_view({'get': 'list'}), name='metrics-list'),
+            path('latest/', views.SystemMetricsViewSet.as_view({'get': 'latest'}), name='metrics-latest'),
+            path('summary/', views.SystemMetricsViewSet.as_view({'get': 'summary'}), name='metrics-summary'),
+        ])),
+        
+        # Mantenimiento y utilidades
+        path('maintenance/', views.SystemMaintenanceView.as_view(), name='system-maintenance'),
+        path('validate/', views.ValidationTestView.as_view(), name='validation-test'),
+        path('error-test/', views.ErrorTestView.as_view(), name='error-test'),
+    ])),
+    
+    # API Routes de las apps
     path('api/auth/', include('users.urls')),
     path('api/cattle/', include('cattle.urls')),
     path('api/iot/', include('iot.urls')),
     path('api/blockchain/', include('blockchain.urls')),
     path('api/users/', include('users.urls')),
     
-    # Health check endpoint
-    path('health/', lambda request: JsonResponse({'status': 'healthy'}), name='health-check'),
+    # Health check endpoint legacy (mantener por compatibilidad)
+    path('health/', lambda request: JsonResponse({'status': 'healthy'}), name='legacy-health-check'),
 ]
 
 # Servir archivos media en desarrollo
@@ -103,12 +136,21 @@ if settings.DEBUG:
 handler404 = lambda request, exception: JsonResponse({
     'error': 'Endpoint no encontrado',
     'message': 'El endpoint solicitado no existe',
-    'documentation': '/swagger/'
+    'documentation': '/swagger/',
+    'available_endpoints': {
+        'core': '/api/core/',
+        'auth': '/api/auth/',
+        'cattle': '/api/cattle/',
+        'iot': '/api/iot/',
+        'blockchain': '/api/blockchain/',
+        'users': '/api/users/'
+    }
 }, status=404)
 
 # Handler para errores 500
 handler500 = lambda request: JsonResponse({
     'error': 'Error interno del servidor',
     'message': 'Ha ocurrido un error inesperado',
-    'support': 'support@ganadochain.com'
+    'support': 'support@ganadochain.com',
+    'incident_id': f'ERR_{int(datetime.now().timestamp())}'
 }, status=500)

@@ -1,3 +1,6 @@
+# ✅ Importar validadores centralizados
+from core.models import validate_ethereum_address, validate_transaction_hash
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.core.exceptions import ValidationError
@@ -37,7 +40,8 @@ class User(AbstractUser):
     wallet_address = models.CharField(
         max_length=42, 
         unique=True,
-        verbose_name="Dirección Wallet"
+        verbose_name="Dirección Wallet",
+        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
     )
     blockchain_roles = models.JSONField(
         default=list,
@@ -123,11 +127,7 @@ class User(AbstractUser):
     def clean(self):
         super().clean()
         
-        # Validar formato de wallet address
-        if self.wallet_address and not re.match(r'^(0x)?[0-9a-fA-F]{40}$', self.wallet_address):
-            raise ValidationError({
-                'wallet_address': 'Formato de dirección wallet inválido. Debe ser una dirección Ethereum válida.'
-            })
+        # ✅ La validación de wallet_address ahora se maneja con el validador centralizado
         
         # Validar que el email sea único si se proporciona
         if self.email and User.objects.filter(email=self.email).exclude(id=self.id).exists():
@@ -271,7 +271,8 @@ class UserActivityLog(models.Model):
     blockchain_tx_hash = models.CharField(
         max_length=66,
         blank=True,
-        verbose_name="Hash de Transacción"
+        verbose_name="Hash de Transacción",
+        validators=[validate_transaction_hash]  # ✅ VALIDADOR AÑADIDO
     )
 
     class Meta:
@@ -292,6 +293,12 @@ class UserActivityLog(models.Model):
         if self.blockchain_tx_hash:
             return f"{self.blockchain_tx_hash[:8]}...{self.blockchain_tx_hash[-6:]}"
         return "N/A"
+    
+    def save(self, *args, **kwargs):
+        # Normalizar hash antes de guardar
+        if self.blockchain_tx_hash and not self.blockchain_tx_hash.startswith('0x'):
+            self.blockchain_tx_hash = '0x' + self.blockchain_tx_hash
+        super().save(*args, **kwargs)
 
 class UserPreference(models.Model):
     """Preferencias de usuario"""

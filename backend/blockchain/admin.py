@@ -5,6 +5,8 @@ from .models import (
     BlockchainEvent, ContractInteraction, 
     NetworkState, SmartContract, GasPriceHistory, TransactionPool
 )
+from cattle.blockchain_models import BlockchainEventState
+from core.admin import format_json_field, status_badge, warning_badge, get_admin_change_link
 import json
 
 @admin.register(BlockchainEvent)
@@ -12,7 +14,8 @@ class BlockchainEventAdmin(admin.ModelAdmin):
     list_display = [
         'event_type_display', 'short_hash', 'block_number', 
         'animal_link', 'batch_link', 'from_address_short', 
-        'to_address_short', 'created_at', 'polyscan_link'
+        'to_address_short', 'created_at', 'polyscan_link',
+        'event_state_display'
     ]
     list_filter = [
         'event_type', 'created_at', 'block_number'
@@ -24,13 +27,13 @@ class BlockchainEventAdmin(admin.ModelAdmin):
     readonly_fields = [
         'transaction_hash', 'block_number', 'created_at',
         'polyscan_link', 'short_hash', 'animal_link', 'batch_link',
-        'metadata_prettified'
+        'metadata_prettified', 'event_state_link'
     ]
     fieldsets = (
         ('Información de Transacción', {
             'fields': (
                 'event_type', 'transaction_hash', 'short_hash', 'block_number',
-                'polyscan_link'
+                'polyscan_link', 'event_state_link'
             )
         }),
         ('Entidades Involucradas', {
@@ -67,6 +70,33 @@ class BlockchainEventAdmin(admin.ModelAdmin):
         )
     event_type_display.short_description = 'Tipo de Evento'
     event_type_display.admin_order_field = 'event_type'
+
+    def event_state_display(self, obj):
+        try:
+            state = obj.blockchaineventstate
+            state_colors = {
+                'PENDING': 'orange',
+                'CONFIRMED': 'green',
+                'FAILED': 'red',
+                'REVERTED': 'purple'
+            }
+            color = state_colors.get(state.state, 'gray')
+            return format_html(
+                '<span style="color: {}; font-weight: bold;">● {}</span>',
+                color, state.get_state_display()
+            )
+        except BlockchainEventState.DoesNotExist:
+            return format_html('<span style="color: gray;">● SIN ESTADO</span>')
+    event_state_display.short_description = 'Estado'
+
+    def event_state_link(self, obj):
+        try:
+            state = obj.blockchaineventstate
+            url = reverse('admin:blockchain_blockchaineventstate_change', args=[state.id])
+            return format_html('<a href="{}">🔗 Ver Estado del Evento</a>', url)
+        except BlockchainEventState.DoesNotExist:
+            return "—"
+    event_state_link.short_description = 'Estado Extendido'
 
     def short_hash(self, obj):
         return obj.short_hash
@@ -108,8 +138,7 @@ class BlockchainEventAdmin(admin.ModelAdmin):
     polyscan_link.short_description = 'Blockchain'
 
     def metadata_prettified(self, obj):
-        return format_html('<pre style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">{}</pre>', 
-                          json.dumps(obj.metadata, indent=2, ensure_ascii=False))
+        return format_json_field(obj.metadata)
     metadata_prettified.short_description = 'Metadata (Formateada)'
 
 @admin.register(ContractInteraction)
@@ -133,7 +162,7 @@ class ContractInteractionAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Información de Contrato', {
             'fields': (
-                'contract_type', 'action_type', 'status'
+                'contract_type', 'action_type', 'status_display'
             )
         }),
         ('Transacción', {
@@ -181,16 +210,12 @@ class ContractInteractionAdmin(admin.ModelAdmin):
     action_type_display.short_description = 'Acción'
 
     def status_display(self, obj):
-        status_colors = {
-            'SUCCESS': 'green',
-            'FAILED': 'red',
-            'PENDING': 'orange'
-        }
-        color = status_colors.get(obj.status, 'gray')
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">● {}</span>',
-            color, obj.get_status_display()
-        )
+        if obj.status == 'SUCCESS':
+            return status_badge(obj.get_status_display(), True)
+        elif obj.status == 'FAILED':
+            return status_badge(obj.get_status_display(), False)
+        else:
+            return warning_badge(obj.get_status_display())
     status_display.short_description = 'Estado'
 
     def caller_short(self, obj):
@@ -240,8 +265,7 @@ class ContractInteractionAdmin(admin.ModelAdmin):
     polyscan_link.short_description = 'Explorer'
 
     def parameters_prettified(self, obj):
-        return format_html('<pre style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">{}</pre>', 
-                          json.dumps(obj.parameters, indent=2, ensure_ascii=False))
+        return format_json_field(obj.parameters)
     parameters_prettified.short_description = 'Parámetros (Formateados)'
 
 @admin.register(NetworkState)
@@ -280,12 +304,9 @@ class NetworkStateAdmin(admin.ModelAdmin):
     average_gas_price_gwei.short_description = 'Precio Gas (Gwei)'
 
     def sync_status(self, obj):
-        color = 'green' if obj.sync_enabled else 'red'
-        status = 'Sincronizando' if obj.sync_enabled else 'Detenido'
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">● {}</span>',
-            color, status
-        )
+        if obj.sync_enabled:
+            return status_badge('Sincronizando', True)
+        return status_badge('Detenido', False)
     sync_status.short_description = 'Estado Sync'
 
     def last_sync_ago(self, obj):
@@ -365,21 +386,15 @@ class SmartContractAdmin(admin.ModelAdmin):
     short_address.short_description = 'Address'
 
     def is_active_display(self, obj):
-        color = 'green' if obj.is_active else 'red'
-        status = 'Activo' if obj.is_active else 'Inactivo'
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">● {}</span>',
-            color, status
-        )
+        if obj.is_active:
+            return status_badge('Activo', True)
+        return status_badge('Inactivo', False)
     is_active_display.short_description = 'Estado'
 
     def is_upgradeable_display(self, obj):
-        color = 'green' if obj.is_upgradeable else 'gray'
-        status = 'Upgradeable' if obj.is_upgradeable else 'No Upgradeable'
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">● {}</span>',
-            color, status
-        )
+        if obj.is_upgradeable:
+            return status_badge('Upgradeable', True)
+        return status_badge('No Upgradeable', False)
     is_upgradeable_display.short_description = 'Upgradeable'
 
     def polyscan_link(self, obj):
@@ -401,8 +416,7 @@ class SmartContractAdmin(admin.ModelAdmin):
     deployment_polyscan_link.short_description = 'Deployment'
 
     def abi_prettified(self, obj):
-        return format_html('<pre style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; max-height: 300px;">{}</pre>', 
-                          json.dumps(obj.abi, indent=2, ensure_ascii=False))
+        return format_json_field(obj.abi)
     abi_prettified.short_description = 'ABI (Formateada)'
 
 @admin.register(GasPriceHistory)
@@ -450,7 +464,7 @@ class TransactionPoolAdmin(admin.ModelAdmin):
     fieldsets = (
         ('Información de Transacción', {
             'fields': (
-                'transaction_hash', 'short_hash', 'status', 'polyscan_link'
+                'transaction_hash', 'short_hash', 'status_display', 'polyscan_link'
             )
         }),
         ('Intentos', {
@@ -495,17 +509,77 @@ class TransactionPoolAdmin(admin.ModelAdmin):
     def raw_transaction_prettified(self, obj):
         try:
             tx_data = json.loads(obj.raw_transaction)
-            return format_html('<pre style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">{}</pre>', 
-                              json.dumps(tx_data, indent=2, ensure_ascii=False))
+            return format_json_field(tx_data)
         except:
             return format_html('<pre style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto;">{}</pre>', 
                               obj.raw_transaction)
     raw_transaction_prettified.short_description = 'Transacción Cruda (Formateada)'
 
+# @admin.register(BlockchainEventState)
+# class BlockchainEventStateAdmin(admin.ModelAdmin):
+#     list_display = [
+#         'event_link', 'state_display', 'confirmation_blocks',
+#         'block_confirmed', 'is_confirmed_display', 'created_at'
+#     ]
+    
+#     list_filter = [
+#         'state', 'created_at'
+#     ]
+    
+#     search_fields = [
+#         'event__transaction_hash', 'event__animal__ear_tag', 
+#         'event__batch__name'
+#     ]
+    
+#     readonly_fields = [
+#         'event_link', 'state', 'confirmation_blocks',
+#         'block_confirmed', 'created_at', 'updated_at',
+#         'is_confirmed_display'
+#     ]
+    
+#     fieldsets = (
+#         ('Información del Estado', {
+#             'fields': (
+#                 'event_link', 'state', 'confirmation_blocks',
+#                 'block_confirmed', 'is_confirmed_display'
+#             )
+#         }),
+#         ('Timestamps', {
+#             'fields': (
+#                 'created_at', 'updated_at'
+#             ),
+#             'classes': ('collapse',)
+#         }),
+#     )
+    
+#     def event_link(self, obj):
+#         return get_admin_change_link(obj.event, 'blockchain', 'blockchainevent')
+#     event_link.short_description = 'Evento Blockchain'
+    
+#     def state_display(self, obj):
+#         state_colors = {
+#             'PENDING': 'orange',
+#             'CONFIRMED': 'green',
+#             'FAILED': 'red',
+#             'REVERTED': 'purple'
+#         }
+#         color = state_colors.get(obj.state, 'gray')
+#         return format_html(
+#             '<span style="color: {}; font-weight: bold;">{}</span>',
+#             color, obj.get_state_display()
+#         )
+#     state_display.short_description = 'Estado'
+    
+#     def is_confirmed_display(self, obj):
+#         if obj.is_confirmed:
+#             return status_badge('Confirmado', True)
+#         return warning_badge('Pendiente')
+#     is_confirmed_display.short_description = 'Confirmado'
+
 # Configuración del Admin Site
-admin.site.site_header = "🐄 GanadoChain Administration"
-admin.site.site_title = "GanadoChain Admin Portal"
-admin.site.index_title = "Bienvenido al Portal de Administración de GanadoChain"
+admin.site.site_header = "🐄 GanadoChain - Blockchain Administration"
+admin.site.site_title = "GanadoChain Blockchain Admin"
+admin.site.index_title = "Administración de Blockchain"
 
 # Personalizar el orden de las apps
 def get_app_list(self, request):
@@ -516,8 +590,9 @@ def get_app_list(self, request):
         'cattle': 1,      # Primero: Módulo de Animales
         'blockchain': 2,  # Segundo: Blockchain
         'iot': 3,         # Tercero: IoT
-        'auth': 4,        # Autenticación
-        'authtoken': 5,   # Tokens
+        'users': 4,       # Usuarios
+        'auth': 5,        # Autenticación
+        'authtoken': 6,   # Tokens
     }
     
     app_list = sorted(

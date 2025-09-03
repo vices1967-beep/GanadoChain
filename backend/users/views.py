@@ -15,9 +15,10 @@ from .serializers import (
     APITokenSerializer, APITokenCreateSerializer, UserStatsSerializer,
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
     UserSearchSerializer, UserRoleUpdateSerializer, VerifyWalletSerializer,
-    UserExportSerializer
+    UserExportSerializer, UserDetailSerializer, NotificationSerializer,
+    UserRoleSerializer, ReputationScoreSerializer, NotificationCreateSerializer
 )
-from .models import UserActivityLog, UserPreference, APIToken
+from .models import UserActivityLog, UserPreference, APIToken, Notification, UserRole, ReputationScore
 import logging
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,8 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserListSerializer
         elif self.action == 'update' or self.action == 'partial_update':
             return UserUpdateSerializer
+        elif self.action == 'retrieve':
+            return UserDetailSerializer
         return UserProfileSerializer
     
     def get_permissions(self):
@@ -78,7 +81,7 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def me(self, request):
         """Obtener el perfil del usuario actual"""
-        serializer = self.get_serializer(request.user)
+        serializer = UserDetailSerializer(request.user, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['put'])
@@ -253,6 +256,51 @@ class UserViewSet(viewsets.ModelViewSet):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @action(detail=True, methods=['get'])
+    def notifications(self, request, pk=None):
+        """Obtener notificaciones del usuario"""
+        user = self.get_object()
+        
+        if user != request.user and not request.user.is_staff:
+            return Response(
+                {"error": "No tienes permisos para ver estas notificaciones."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        notifications = Notification.objects.filter(user=user).order_by('-created_at')
+        serializer = NotificationSerializer(notifications, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def roles(self, request, pk=None):
+        """Obtener roles detallados del usuario"""
+        user = self.get_object()
+        
+        if user != request.user and not request.user.is_staff:
+            return Response(
+                {"error": "No tienes permisos para ver estos roles."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        roles = UserRole.objects.filter(user=user, is_active=True)
+        serializer = UserRoleSerializer(roles, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def reputation(self, request, pk=None):
+        """Obtener reputación del usuario"""
+        user = self.get_object()
+        
+        if user != request.user and not request.user.is_staff:
+            return Response(
+                {"error": "No tienes permisos para ver esta reputación."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        reputation_scores = ReputationScore.objects.filter(user=user)
+        serializer = ReputationScoreSerializer(reputation_scores, many=True)
+        return Response(serializer.data)
+    
     def get_client_ip(self, request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
@@ -392,6 +440,53 @@ class UserActivityLogViewSet(viewsets.ReadOnlyModelViewSet):
         logs = self.get_queryset()[:limit]
         serializer = self.get_serializer(logs, many=True)
         return Response(serializer.data)
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+    
+    @action(detail=False, methods=['get'])
+    def unread(self, request):
+        """Notificaciones no leídas"""
+        notifications = Notification.objects.filter(user=request.user, is_read=False)
+        serializer = self.get_serializer(notifications, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def mark_read(self, request, pk=None):
+        """Marcar notificación como leída"""
+        notification = self.get_object()
+        notification.is_read = True
+        notification.save()
+        serializer = self.get_serializer(notification)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['post'])
+    def mark_all_read(self, request):
+        """Marcar todas las notificaciones como leídas"""
+        Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+        return Response({"message": "Todas las notificaciones marcadas como leídas."})
+
+class UserRoleViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = UserRoleSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return UserRole.objects.all()
+        return UserRole.objects.filter(user=self.request.user)
+
+class ReputationScoreViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ReputationScoreSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return ReputationScore.objects.all()
+        return ReputationScore.objects.filter(user=self.request.user)
 
 class PasswordResetView(APIView):
     permission_classes = [permissions.AllowAny]
