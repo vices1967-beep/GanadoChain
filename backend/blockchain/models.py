@@ -244,6 +244,7 @@ class NetworkState(models.Model):
     class Meta:
         verbose_name = "Estado de Red"
         verbose_name_plural = "Estados de Red"
+        ordering = ['-last_sync_time']  # AÑADIR ESTO
 
     def __str__(self):
         return f"Block #{self.last_block_number} - {self.network_name}"

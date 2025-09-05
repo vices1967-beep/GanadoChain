@@ -232,24 +232,18 @@ class AssignRoleView(generics.CreateAPIView):
         
         blockchain_service = BlockchainService()
         try:
-            result = blockchain_service.assign_role(
+            tx_hash = blockchain_service.assign_role(
                 serializer.validated_data['target_wallet'],
                 serializer.validated_data['role']
             )
             
-            if result['success']:
-                return Response({
-                    'success': True,
-                    'tx_hash': result['tx_hash'],
-                    'message': 'Rol asignado correctamente',
-                    'role': serializer.validated_data['role'],
-                    'target_wallet': serializer.validated_data['target_wallet']
-                }, status=status.HTTP_201_CREATED)
-            else:
-                return Response({
-                    'success': False,
-                    'error': result.get('error', 'Error desconocido')
-                }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'success': True,
+                'tx_hash': tx_hash,
+                'message': 'Rol asignado correctamente',
+                'role': serializer.validated_data['role'],
+                'target_wallet': serializer.validated_data['target_wallet']
+            }, status=status.HTTP_201_CREATED)
                 
         except Exception as e:
             logger.error(f"Error assigning role: {str(e)}")
@@ -257,6 +251,8 @@ class AssignRoleView(generics.CreateAPIView):
                 'success': False,
                 'error': f'Error asignando rol: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+# ... (código existente)
 
 class MintNFTView(generics.CreateAPIView):
     serializer_class = MintNFTSerializer
@@ -269,43 +265,36 @@ class MintNFTView(generics.CreateAPIView):
         blockchain_service = BlockchainService()
         try:
             # Verificar que el animal existe
-            animal = get_object_or_404(Animal, id=serializer.validated_data['animal_id'])
-            
-            result = blockchain_service.mint_animal_nft(
-                animal=animal,
-                owner_wallet=serializer.validated_data['owner_wallet'],
-                metadata_uri=serializer.validated_data['metadata_uri'],
-                operational_ipfs=serializer.validated_data.get('operational_ipfs', '')
-            )
-            
-            if result['success']:
-                return Response({
-                    'success': True,
-                    'tx_hash': result['tx_hash'],
-                    'token_id': result['token_id'],
-                    'message': 'NFT minted correctamente',
-                    'animal_id': animal.id,
-                    'ear_tag': animal.ear_tag
-                }, status=status.HTTP_201_CREATED)
-            else:
+            try:
+                animal = Animal.objects.get(id=serializer.validated_data['animal_id'])
+            except Animal.DoesNotExist:
                 return Response({
                     'success': False,
-                    'error': result.get('error', 'Error desconocido'),
-                    'animal_id': animal.id
-                }, status=status.HTTP_400_BAD_REQUEST)
-                
-        except Animal.DoesNotExist:
+                    'error': f'Animal con ID {serializer.validated_data["animal_id"]} no encontrado'
+                }, status=status.HTTP_404_NOT_FOUND)  # ✅ Cambiado a 404
+            
+            tx_hash = blockchain_service.mint_animal_nft(
+                serializer.validated_data['owner_wallet'],
+                serializer.validated_data['metadata_uri'],
+                serializer.validated_data.get('operational_ipfs', '')
+            )
+            
             return Response({
-                'success': False,
-                'error': f'Animal con ID {serializer.validated_data["animal_id"]} no encontrado'
-            }, status=status.HTTP_404_NOT_FOUND)
+                'success': True,
+                'tx_hash': tx_hash,
+                'message': 'NFT minted correctamente',
+                'animal_id': animal.id,
+                'ear_tag': animal.ear_tag
+            }, status=status.HTTP_201_CREATED)
+                
         except Exception as e:
             logger.error(f"Error minting NFT: {str(e)}")
             return Response({
                 'success': False,
                 'error': f'Error minting NFT: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
-
+        
+# ... (resto del código)
 class CheckRoleView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = CheckRoleSerializer
@@ -346,25 +335,18 @@ class MintTokensView(generics.CreateAPIView):
         
         blockchain_service = BlockchainService()
         try:
-            result = blockchain_service.mint_tokens(
+            tx_hash = blockchain_service.mint_tokens(
                 serializer.validated_data['to_wallet'],
-                serializer.validated_data['amount'],
-                serializer.validated_data.get('batch_id', '')
+                serializer.validated_data['amount']
             )
             
-            if result['success']:
-                return Response({
-                    'success': True,
-                    'tx_hash': result['tx_hash'],
-                    'message': 'Tokens minted correctamente',
-                    'amount': serializer.validated_data['amount'],
-                    'to_wallet': serializer.validated_data['to_wallet']
-                }, status=status.HTTP_201_CREATED)
-            else:
-                return Response({
-                    'success': False,
-                    'error': result.get('error', 'Error desconocido')
-                }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'success': True,
+                'tx_hash': tx_hash,
+                'message': 'Tokens minted correctamente',
+                'amount': serializer.validated_data['amount'],
+                'to_wallet': serializer.validated_data['to_wallet']
+            }, status=status.HTTP_201_CREATED)
                 
         except Exception as e:
             logger.error(f"Error minting tokens: {str(e)}")
@@ -425,7 +407,7 @@ class UpdateHealthView(generics.CreateAPIView):
             # Verificar que el animal existe
             animal = get_object_or_404(Animal, id=data['animal_id'])
             
-            result = blockchain_service.update_animal_health(
+            tx_hash = blockchain_service.update_animal_health(
                 animal_id=data['animal_id'],
                 health_status=data['health_status'],
                 veterinarian_wallet=data.get('veterinarian_wallet', ''),
@@ -436,21 +418,14 @@ class UpdateHealthView(generics.CreateAPIView):
                 movement_activity=data.get('movement_activity')
             )
             
-            if result['success']:
-                return Response({
-                    'success': True,
-                    'tx_hash': result['tx_hash'],
-                    'message': 'Estado de salud actualizado correctamente',
-                    'animal_id': animal.id,
-                    'ear_tag': animal.ear_tag,
-                    'health_status': data['health_status']
-                }, status=status.HTTP_201_CREATED)
-            else:
-                return Response({
-                    'success': False,
-                    'error': result.get('error', 'Error desconocido'),
-                    'animal_id': animal.id
-                }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'success': True,
+                'tx_hash': tx_hash,
+                'message': 'Estado de salud actualizado correctamente',
+                'animal_id': animal.id,
+                'ear_tag': animal.ear_tag,
+                'health_status': data['health_status']
+            }, status=status.HTTP_201_CREATED)
                 
         except Animal.DoesNotExist:
             return Response({
@@ -557,7 +532,7 @@ class NetworkStatusView(APIView):
                     'account_balance_eth': blockchain_service.w3.from_wei(balance, 'ether'),
                     'account_address': blockchain_service.wallet_address
                 },
-                'network_state': network_serializer.data
+                'network_state': network_serializer.data if network_state else {}
             })
         except Exception as e:
             logger.error(f"Error getting network status: {str(e)}")

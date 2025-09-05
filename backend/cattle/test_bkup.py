@@ -13,6 +13,7 @@ User = get_user_model()
 class AnimalViewSetTests(APITestCase):
     def setUp(self):
         self.client = APIClient()
+        # Crear usuario con email en lugar de username
         self.user = User.objects.create_user(
             username='testuser',
             email='test@example.com',
@@ -23,6 +24,7 @@ class AnimalViewSetTests(APITestCase):
         )
         self.client.force_authenticate(user=self.user)
         
+        # Crear animal de prueba
         self.animal = Animal.objects.create(
             ear_tag='TEST001',
             breed='Angus',
@@ -106,6 +108,7 @@ class BatchViewSetTests(APITestCase):
         )
         self.client.force_authenticate(user=self.user)
         
+        # Crear animal para el batch
         self.animal = Animal.objects.create(
             ear_tag='BATCH001',
             breed='Angus',
@@ -116,7 +119,7 @@ class BatchViewSetTests(APITestCase):
             location='Test Location'
         )
         
-        # Crear batch sin animales inicialmente
+        # Crear batch de prueba con animal
         self.batch = Batch.objects.create(
             name='Test Batch',
             status='CREATED',
@@ -124,47 +127,38 @@ class BatchViewSetTests(APITestCase):
             destination='Test Destination',
             created_by=self.user
         )
+        self.batch.animals.add(self.animal)
 
     def test_list_batches(self):
-        """Test básico de listado - si falla es por problema en serializer"""
+        """Test para listar batches"""
         url = reverse('cattle:batch-list')
         response = self.client.get(url)
-        # Si hay error 500, es problema del serializer, no del test
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_500_INTERNAL_SERVER_ERROR])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
 
-    def test_create_batch_without_animals(self):
-        """Test crear batch sin animales (debería ser permitido)"""
+    def test_create_batch(self):
+        """Test para crear batch básico (sin animales inicialmente)"""
         url = reverse('cattle:batch-list')
         data = {
-            'name': 'Empty Batch',
+            'name': 'New Test Batch',
             'status': 'CREATED',
             'origin': 'Test Origin',
             'destination': 'Test Destination'
+            # NOTA: El campo 'animals' no está en BatchCreateSerializer según tu código
+            # Los animales se añaden después con el endpoint add_animals
         }
         response = self.client.post(url, data)
-        # Si falla, es problema de validación en el serializer
-        self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST])
-
-    def test_create_batch_with_animals(self):
-        """Test crear batch con animales"""
-        url = reverse('cattle:batch-list')
-        data = {
-            'name': 'Batch with Animals',
-            'status': 'CREATED',
-            'origin': 'Test Origin',
-            'destination': 'Test Destination',
-            'animals': [self.animal.id]
-        }
-        response = self.client.post(url, data)
+        print("Batch create response:", response.status_code, response.data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Batch.objects.count(), 2)
 
     def test_add_animals_to_batch(self):
-        """Test para añadir animales a batch existente"""
+        """Test para añadir animales a un batch existente"""
         url = reverse('cattle:batch-add-animals', args=[self.batch.id])
         data = {'animal_ids': [self.animal.id]}
         response = self.client.post(url, data)
-        # Si hay error 500, es problema en la vista/serializer
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST, status.HTTP_500_INTERNAL_SERVER_ERROR])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.batch.animals.count(), 1)
 
 class HealthRecordViewSetTests(APITestCase):
     def setUp(self):
@@ -357,41 +351,4 @@ class PermissionTests(APITestCase):
         response = self.client.get(url)
         
         # Superuser debería poder acceder
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-# Tests simples de respaldo
-class SimpleTests(APITestCase):
-    """Tests simples que no dependen de la funcionalidad problemática"""
-    
-    def setUp(self):
-        self.client = APIClient()
-        self.user = User.objects.create_user(
-            username='simpleuser',
-            email='simple@example.com',
-            password='testpass123',
-            first_name='Simple',
-            last_name='User',
-            wallet_address='0xF42d35Cc6634C0532925a3b844Bc454e4438f44e'
-        )
-        self.client.force_authenticate(user=self.user)
-        
-        self.animal = Animal.objects.create(
-            ear_tag='SIMPLE001',
-            breed='Angus',
-            birth_date='2023-01-01',
-            weight=300.5,
-            health_status='HEALTHY',
-            owner=self.user,
-            location='Test Location'
-        )
-
-    def test_retrieve_animal(self):
-        url = reverse('cattle:animal-detail', args=[self.animal.id])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
-    def test_search_animals(self):
-        url = reverse('cattle:animal-search')
-        data = {'ear_tag': 'SIMPLE001'}
-        response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)

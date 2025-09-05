@@ -79,7 +79,21 @@ class UserViewSet(viewsets.ModelViewSet):
         elif self.action in ['update', 'partial_update', 'destroy']:
             # Solo el propio usuario o admin puede modificar/eliminar
             return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
+        elif self.action == 'retrieve':
+            # Permiso personalizado para ver detalles
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated()]
+    
+    def get_object(self):
+        #Sobrescribir para manejar permisos de visualización"""
+        obj = super().get_object()
+        
+        # Si no es staff, solo puede ver su propio perfil
+        if not self.request.user.is_staff and obj != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("No tienes permisos para ver este perfil.")
+        
+        return obj
     
     @action(detail=False, methods=['get'])
     def me(self, request):

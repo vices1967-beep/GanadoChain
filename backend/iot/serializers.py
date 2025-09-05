@@ -24,11 +24,13 @@ class IoTDeviceSerializer(serializers.ModelSerializer):
             'description', 'status', 'status_display', 'is_active', 'animal',
             'animal_ear_tag', 'animal_breed', 'owner', 'owner_name', 'owner_email',
             'firmware_version', 'battery_level', 'battery_status', 'last_reading',
-            'last_reading_ago', 'location', 'ip_address', 'mac_address',
+            'last_reading_ago', 'location', 'ip_address', 'mac_address', 'auth_token',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'is_active', 'battery_status', 'last_reading_ago']
-    
+        read_only_fields = [
+            'created_at', 'updated_at', 'is_active', 'battery_status', 
+            'last_reading_ago', 'owner', 'owner_name', 'owner_email', 'auth_token'
+        ]
     def validate_mac_address(self, value):
         if value and not re.match(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$', value):
             raise serializers.ValidationError('Formato de MAC address inválido')

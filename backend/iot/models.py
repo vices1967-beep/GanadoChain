@@ -42,6 +42,12 @@ class IoTDevice(models.Model):
     location = models.CharField(max_length=255, blank=True, verbose_name="Ubicación")
     ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name="Dirección IP")
     mac_address = models.CharField(max_length=17, blank=True, verbose_name="Dirección MAC")
+    auth_token = models.CharField(
+        max_length=100, 
+        blank=True, 
+        verbose_name="Token de Autenticación",
+        help_text="Token para autenticación API de dispositivos"
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de Creación")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Última Actualización")
 
@@ -55,6 +61,7 @@ class IoTDevice(models.Model):
             models.Index(fields=['animal']),
             models.Index(fields=['owner']),
             models.Index(fields=['last_reading']),
+            models.Index(fields=['auth_token']),
         ]
         ordering = ['-created_at']
 
@@ -66,6 +73,17 @@ class IoTDevice(models.Model):
         # Validar formato de MAC address si se proporciona
         if self.mac_address and not re.match(r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$', self.mac_address):
             raise ValidationError({'mac_address': 'Formato de MAC address inválido'})
+        
+        # Validar que el auth_token sea único si se proporciona
+        if self.auth_token and IoTDevice.objects.filter(auth_token=self.auth_token).exclude(id=self.id).exists():
+            raise ValidationError({'auth_token': 'Este token de autenticación ya está en uso'})
+    
+    def save(self, *args, **kwargs):
+        # Generar auth_token automáticamente si no se proporciona
+        if not self.auth_token and self.device_id:
+            import secrets
+            self.auth_token = secrets.token_urlsafe(32)
+        super().save(*args, **kwargs)
     
     @property
     def is_active(self):
@@ -94,7 +112,7 @@ class IoTDevice(models.Model):
     
     def get_absolute_url(self):
         return reverse('admin:iot_iotdevice_change', args=[self.id])
-
+    
 class GPSData(models.Model):
     device = models.ForeignKey(IoTDevice, on_delete=models.CASCADE, related_name='gps_data', verbose_name="Dispositivo")
     animal = models.ForeignKey('cattle.Animal', on_delete=models.CASCADE, related_name='gps_data', verbose_name="Animal")
@@ -288,3 +306,8 @@ class DeviceConfiguration(models.Model):
 
     def __str__(self):
         return f"Configuración de {self.device.device_id}"
+    
+    @property
+    def owner(self):
+        """Propiedad para compatibilidad con permisos"""
+        return self.device.owner if self.device else None

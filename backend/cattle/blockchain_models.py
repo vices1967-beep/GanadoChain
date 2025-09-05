@@ -20,3 +20,6 @@ class BlockchainEventState(models.Model):
     class Meta:
         verbose_name = "Estado de Evento Blockchain"
         verbose_name_plural = "Estados de Eventos Blockchain"
+    
+    def __str__(self):
+        return f"{self.event} - {self.state}"

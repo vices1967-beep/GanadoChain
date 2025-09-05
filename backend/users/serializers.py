@@ -53,21 +53,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         
         # Validar que el wallet address sea único
         wallet_address = attrs['wallet_address']
-        if User.objects.filter(wallet_address=wallet_address).exists():
+        if User.objects.filter(wallet_address__iexact=wallet_address).exists():
             raise serializers.ValidationError({"wallet_address": "Esta dirección wallet ya está registrada."})
         
         # Validar que el email sea único
         email = attrs.get('email')
-        if email and User.objects.filter(email=email).exists():
+        if email and User.objects.filter(email__iexact=email).exists():
             raise serializers.ValidationError({"email": "Este correo electrónico ya está registrado."})
         
         # Validar que el username sea único
         username = attrs.get('username')
-        if username and User.objects.filter(username=username).exists():
+        if username and User.objects.filter(username__iexact=username).exists():
             raise serializers.ValidationError({"username": "Este nombre de usuario ya está en uso."})
         
         return attrs
-
+    
     def create(self, validated_data):
         validated_data.pop('password2')
         password = validated_data.pop('password')
@@ -310,11 +310,11 @@ class UserDetailSerializer(serializers.ModelSerializer):
     role_display = serializers.CharField(source='get_role_display', read_only=True)
     wallet_short = serializers.CharField(read_only=True)
     profile_completion = serializers.IntegerField(read_only=True)
-    preferences = UserPreferenceSerializer(source='preferences', read_only=True)
-    activity_logs = UserActivityLogSerializer(many=True, read_only=True)
-    notifications = NotificationSerializer(many=True, read_only=True)
-    detailed_roles = UserRoleSerializer(many=True, read_only=True)
-    reputation_scores = ReputationScoreSerializer(many=True, read_only=True)
+    preferences = serializers.SerializerMethodField(read_only=True)
+    activity_logs = serializers.SerializerMethodField(read_only=True)
+    notifications = serializers.SerializerMethodField(read_only=True)
+    detailed_roles = serializers.SerializerMethodField(read_only=True)
+    reputation_scores = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
         model = User
@@ -329,6 +329,28 @@ class UserDetailSerializer(serializers.ModelSerializer):
             'detailed_roles', 'reputation_scores'
         )
         read_only_fields = ('date_joined', 'last_login', 'profile_completion')
+    
+    def get_preferences(self, obj):
+        try:
+            return UserPreferenceSerializer(obj.preferences).data
+        except UserPreference.DoesNotExist:
+            return None
+    
+    def get_activity_logs(self, obj):
+        logs = obj.activity_logs.all()[:10]  # Solo últimos 10
+        return UserActivityLogSerializer(logs, many=True).data
+    
+    def get_notifications(self, obj):
+        notifications = obj.notification_set.all()[:10]  # Solo últimos 10
+        return NotificationSerializer(notifications, many=True).data
+    
+    def get_detailed_roles(self, obj):
+        roles = obj.detailed_roles.filter(is_active=True)
+        return UserRoleSerializer(roles, many=True).data
+    
+    def get_reputation_scores(self, obj):
+        scores = obj.reputationscore_set.all()
+        return ReputationScoreSerializer(scores, many=True).data
 
 class UserBulkUpdateSerializer(serializers.Serializer):
     """Serializer para actualización masiva de usuarios"""

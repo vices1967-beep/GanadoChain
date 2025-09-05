@@ -342,6 +342,7 @@ class UserPreference(models.Model):
     class Meta:
         verbose_name = "Preferencia de Usuario"
         verbose_name_plural = "Preferencias de Usuario"
+        ordering = ['-updated_at']  # AÑADIR ESTO
 
     def __str__(self):
         return f"Preferencias de {self.user.username}"
@@ -395,6 +396,7 @@ class APIToken(models.Model):
     class Meta:
         verbose_name = "Token de API"
         verbose_name_plural = "Tokens de API"
+        ordering = ['-created_at']  # AÑADIR ESTO
         indexes = [
             models.Index(fields=['token']),
             models.Index(fields=['user']),

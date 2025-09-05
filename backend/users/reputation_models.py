@@ -47,6 +47,7 @@ class UserRole(models.Model):
         unique_together = ['user', 'role_type', 'scope_type', 'scope_id']
         verbose_name = "Rol Detallado de Usuario"
         verbose_name_plural = "Roles Detallados de Usuario"
+        ordering = ['-granted_at']  # AÑADIR ESTO
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -100,6 +101,7 @@ class ReputationScore(models.Model):
         unique_together = ['user', 'reputation_type']
         verbose_name = "Puntuación de Reputación"
         verbose_name_plural = "Puntuaciones de Reputación"
+        ordering = ['-last_calculated']  # AÑADIR ESTO
 
     def __str__(self):
         return f"{self.user.username} - {self.reputation_type} - {self.score}"

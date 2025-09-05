@@ -4,6 +4,8 @@ from .models import BlockchainEvent, ContractInteraction, NetworkState, SmartCon
 import re
 import json
 from decimal import Decimal
+from django.core.exceptions import ValidationError
+from web3 import Web3
 
 class EthereumAddressField(serializers.CharField):
     """Campo personalizado para validar direcciones Ethereum"""
@@ -19,6 +21,7 @@ class EthereumAddressField(serializers.CharField):
         return data.lower()
     
     def validate(self, value):
+        import re
         if value and not re.match(r'^0x[0-9a-f]{40}$', value):
             raise serializers.ValidationError('Dirección Ethereum inválida')
         return value
@@ -162,26 +165,51 @@ class TransactionPoolSerializer(serializers.ModelSerializer):
         ]
 
 class AssignRoleSerializer(serializers.Serializer):
-    target_wallet = EthereumAddressField()
+    target_wallet = serializers.CharField(max_length=42)
     role = serializers.CharField(max_length=50)
-
-    def validate_role(self, value):
-        roles_validos = ['PRODUCER_ROLE', 'VET_ROLE', 'FRIGORIFICO_ROLE', 
-                        'AUDITOR_ROLE', 'IOT_ROLE', 'DAO_ROLE']
-        if value not in roles_validos:
-            raise serializers.ValidationError(f'Rol inválido. Roles válidos: {", ".join(roles_validos)}')
+    
+    def validate_target_wallet(self, value):
+        w3 = Web3()
+        if not w3.is_address(value):
+            raise serializers.ValidationError("Dirección de wallet inválida")
         return value
+
+# ... (otros serializers)
 
 class MintNFTSerializer(serializers.Serializer):
-    animal_id = serializers.IntegerField(min_value=1)
-    owner_wallet = EthereumAddressField()
-    metadata_uri = serializers.CharField(max_length=255)
-    operational_ipfs = serializers.CharField(required=False, allow_blank=True, max_length=255)
-
-    def validate_metadata_uri(self, value):
-        if not value.startswith(('ipfs://', 'https://', 'http://')):
-            raise serializers.ValidationError('Metadata URI debe comenzar con ipfs://, https:// o http://')
+    animal_id = serializers.IntegerField()
+    owner_wallet = serializers.CharField(max_length=42)
+    metadata_uri = serializers.CharField(required=False, allow_blank=True)
+    operational_ipfs = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate_owner_wallet(self, value):
+        w3 = Web3()
+        if not w3.is_address(value):
+            raise serializers.ValidationError("Dirección de wallet inválida")
         return value
+
+    def validate(self, data):
+        from cattle.models import Animal  # import local para evitar dependencias circulares
+        animal_id = data.get("animal_id")
+        metadata_uri = data.get("metadata_uri")
+
+        # Buscar el animal
+        try:
+            animal = Animal.objects.get(pk=animal_id)
+        except Animal.DoesNotExist:
+            raise serializers.ValidationError({"animal_id": "El animal no existe."})
+
+        # Resolver metadata_uri: request o ipfs_hash
+        if not metadata_uri:
+            metadata_uri = f'ipfs://{animal.ipfs_hash}' if animal.ipfs_hash else None
+
+        if not metadata_uri:
+            raise serializers.ValidationError({
+                "metadata_uri": "El animal no tiene ipfs_hash y no se envió metadata_uri."
+            })
+
+        data["metadata_uri"] = metadata_uri
+        return data
 
 class RegisterAnimalSerializer(serializers.Serializer):
     animal_id = serializers.IntegerField(min_value=1)
@@ -199,9 +227,24 @@ class CheckRoleSerializer(serializers.Serializer):
         return value
 
 class MintTokensSerializer(serializers.Serializer):
-    to_wallet = EthereumAddressField()
-    amount = serializers.DecimalField(max_digits=18, decimal_places=0, min_value=Decimal('1'), max_value=Decimal('1000000000000000000'))
-    batch_id = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    to_wallet = serializers.CharField(max_length=42)
+    amount = serializers.CharField()
+    
+    def validate_to_wallet(self, value):
+        w3 = Web3()
+        if not w3.is_address(value):
+            raise serializers.ValidationError("Dirección de wallet inválida")
+        return value
+    
+    def validate_amount(self, value):
+        try:
+            # Validar que el amount sea un número válido
+            amount = int(value)
+            if amount <= 0:
+                raise serializers.ValidationError("El amount debe ser mayor a 0")
+            return value
+        except ValueError:
+            raise serializers.ValidationError("Amount debe ser un número válido")
 
 class UpdateHealthSerializer(serializers.Serializer):
     animal_id = serializers.IntegerField(min_value=1)

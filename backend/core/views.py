@@ -25,6 +25,62 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
+# AGREGAR ESTAS FUNCIONES AL PRINCIPIO DEL ARCHIVO, después de los imports
+
+def check_database_health():
+    """Verificar salud de la base de datos"""
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        return True
+    except Exception as e:
+        logger.error(f"Database health check failed: {str(e)}")
+        return False
+
+def check_blockchain_health():
+    """Verificar salud de la blockchain"""
+    try:
+        from web3 import Web3
+        from web3.exceptions import Web3ConnectionError  # ← CAMBIAR ESTA LÍNEA
+        w3 = Web3(Web3.HTTPProvider(settings.BLOCKCHAIN_RPC_URL))
+        return w3.is_connected()
+    except (Web3ConnectionError, Exception) as e:
+        logger.error(f"Blockchain health check failed: {str(e)}")
+        return False
+
+def check_iot_health():
+    """Verificar salud de dispositivos IoT"""
+    try:
+        # Placeholder - implementar verificación real
+        return True
+    except Exception as e:
+        logger.error(f"IoT health check failed: {str(e)}")
+        return False
+
+def get_system_uptime():
+    """Obtener uptime del sistema"""
+    try:
+        with open('/proc/uptime', 'r') as f:
+            uptime_seconds = float(f.readline().split()[0])
+            return timedelta(seconds=uptime_seconds)
+    except:
+        return timedelta(seconds=0)
+
+def get_system_metrics():
+    """Obtener métricas del sistema"""
+    memory = psutil.virtual_memory()
+    cpu_usage = psutil.cpu_percent(interval=1)
+    disk_usage = psutil.disk_usage('/').percent
+    net_connections = len(psutil.net_connections())
+    
+    return {
+        'memory_usage': memory.percent,
+        'cpu_usage': cpu_usage,
+        'disk_usage': disk_usage,
+        'active_connections': net_connections
+    }
+
 class SystemMetricsViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet para métricas del sistema"""
     serializer_class = SystemMetricsSerializer
@@ -107,44 +163,14 @@ class HealthCheckView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def get(self, request):
-        # Verificar base de datos
-        try:
-            from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT 1")
-            database_status = True
-        except Exception as e:
-            database_status = False
-            logger.error(f"Database health check failed: {str(e)}")
+        # Verificar diferentes componentes
+        database_status = check_database_health()
+        blockchain_status = check_blockchain_health()
+        iot_status = check_iot_health()
         
-        # Verificar blockchain (conexión básica)
-        try:
-            from web3 import Web3
-            from web3.exceptions import ConnectionError
-            w3 = Web3(Web3.HTTPProvider(settings.BLOCKCHAIN_RPC_URL))
-            blockchain_status = w3.is_connected()
-        except (ConnectionError, Exception) as e:
-            blockchain_status = False
-            logger.error(f"Blockchain health check failed: {str(e)}")
-        
-        # Verificar dispositivos IoT (conexión básica)
-        try:
-            iot_status = True  # Placeholder - implementar verificación real
-        except Exception as e:
-            iot_status = False
-            logger.error(f"IoT health check failed: {str(e)}")
-        
-        # Métricas del sistema
-        memory = psutil.virtual_memory()
-        cpu_usage = psutil.cpu_percent(interval=1)
-        
-        # Obtener uptime del sistema
-        try:
-            with open('/proc/uptime', 'r') as f:
-                uptime_seconds = float(f.readline().split()[0])
-                uptime = timedelta(seconds=uptime_seconds)
-        except:
-            uptime = timedelta(seconds=0)
+        # Obtener métricas del sistema
+        system_metrics = get_system_metrics()
+        uptime = get_system_uptime()
         
         health_data = {
             'status': 'healthy' if all([database_status, blockchain_status, iot_status]) else 'degraded',
@@ -154,15 +180,12 @@ class HealthCheckView(APIView):
             'iot_devices': iot_status,
             'version': settings.VERSION if hasattr(settings, 'VERSION') else '1.0.0',
             'uptime': uptime,
-            'memory_usage': memory.percent,
-            'cpu_usage': cpu_usage,
-            'disk_usage': psutil.disk_usage('/').percent,
-            'active_connections': len(psutil.net_connections())
+            **system_metrics  # Desempaquetar todas las métricas
         }
         
         serializer = HealthCheckSerializer(health_data)
         return Response(serializer.data)
-
+    
 class SystemConfigView(APIView):
     """Vista para obtener configuración del sistema"""
     permission_classes = [permissions.IsAdminUser]

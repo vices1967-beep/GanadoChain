@@ -102,21 +102,21 @@ class BatchSerializer(serializers.ModelSerializer):
     
     def get_minted_animals_count(self, obj):
         return obj.animals.filter(token_id__isnull=False).count()
-    
-    def validate_blockchain_tx(self, value):
-        import re
-        if value and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', value):
-            raise serializers.ValidationError('Formato de hash de transacción inválido.')
-        return value
 
 class BatchCreateSerializer(serializers.ModelSerializer):
+    animals = serializers.PrimaryKeyRelatedField(
+        many=True, 
+        queryset=Animal.objects.all(),
+        required=False  # Hacerlo opcional para creación inicial
+    )
+    
     class Meta:
         model = Batch
-        fields = ['name', 'animals', 'origin', 'destination', 'status', 'created_by']
-        ref_name = 'CattleBatchCreateSerializer'
+        fields = ['name', 'animals', 'origin', 'destination', 'status']
+        # Removido 'created_by' ya que se asigna automáticamente
     
     def validate_animals(self, value):
-        if value:
+        if value and len(value) > 0:  # Solo validar si hay animales
             owners = set(animal.owner_id for animal in value)
             if len(owners) > 1:
                 raise serializers.ValidationError('Todos los animales deben pertenecer al mismo dueño.')
@@ -125,12 +125,35 @@ class BatchCreateSerializer(serializers.ModelSerializer):
 class AnimalMintSerializer(serializers.Serializer):
     animal_id = serializers.IntegerField()
     wallet_address = serializers.CharField(max_length=42)
-    
+    metadata_uri = serializers.CharField(required=False, allow_blank=True)
+
     def validate_wallet_address(self, value):
         import re
         if not re.match(r'^(0x)?[0-9a-fA-F]{40}$', value):
             raise serializers.ValidationError('Formato de wallet inválido.')
         return value
+
+    def validate(self, data):
+        # Recuperamos el animal
+        try:
+            animal = Animal.objects.get(pk=data['animal_id'])
+        except Animal.DoesNotExist:
+            raise serializers.ValidationError({"animal_id": "El animal no existe."})
+
+        # Resolver metadata_uri
+        metadata_uri = data.get('metadata_uri')
+        if not metadata_uri:
+            metadata_uri = f'ipfs://{animal.ipfs_hash}' if animal.ipfs_hash else None
+
+        if not metadata_uri:
+            raise serializers.ValidationError({
+                "metadata_uri": "El animal no tiene ipfs_hash y no se envió metadata_uri."
+            })
+
+        # Reinyectar metadata_uri resuelto en data (para que la vista lo use)
+        data['metadata_uri'] = metadata_uri
+        return data
+
 
 class HealthDataSerializer(serializers.Serializer):
     device_id = serializers.CharField(max_length=100)

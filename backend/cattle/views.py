@@ -364,10 +364,7 @@ class BatchViewSet(viewsets.ModelViewSet):
         if name:
             queryset = queryset.filter(name__icontains=name)
             
-        return queryset.annotate(
-            animals_count=Count('animals'),
-            minted_animals_count=Count('animals', filter=Q(animals__token_id__isnull=False))
-        )
+        return queryset
     
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -411,7 +408,15 @@ class BatchViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def add_animals(self, request, pk=None):
+        """Añadir animales a un lote existente"""
         batch = self.get_object()
+        
+        # Validar permisos
+        if batch.created_by != request.user and not request.user.is_superuser:
+            return Response({
+                'error': 'No tienes permisos para modificar este lote'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
         animal_ids = request.data.get('animal_ids', [])
         
         if not animal_ids:
@@ -420,7 +425,18 @@ class BatchViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            animals = Animal.objects.filter(id__in=animal_ids, owner=request.user)
+            # Validar que los animales existen y pertenecen al usuario
+            if request.user.is_superuser:
+                animals = Animal.objects.filter(id__in=animal_ids)
+            else:
+                animals = Animal.objects.filter(id__in=animal_ids, owner=request.user)
+            
+            if animals.count() != len(animal_ids):
+                return Response({
+                    'error': 'Algunos animales no existen o no tienes permisos'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Añadir animales al lote
             batch.animals.add(*animals)
             batch.save()
             
@@ -428,13 +444,15 @@ class BatchViewSet(viewsets.ModelViewSet):
                 'success': True,
                 'message': f'{animals.count()} animales añadidos al lote',
                 'batch_id': batch.id,
-                'batch_name': batch.name
+                'batch_name': batch.name,
+                'added_animals_count': animals.count()
             })
             
         except Exception as e:
+            logger.error(f"Error añadiendo animales al lote {pk}: {str(e)}")
             return Response({
                 'error': f'Error añadiendo animales: {str(e)}'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=True, methods=['post'])
     def remove_animals(self, request, pk=None):
@@ -455,7 +473,8 @@ class BatchViewSet(viewsets.ModelViewSet):
                 'success': True,
                 'message': f'{len(animal_ids)} animales removidos del lote',
                 'batch_id': batch.id,
-                'batch_name': batch.name
+                'batch_name': batch.name,
+                'added_animals_count': animals.count()
             })
             
         except Exception as e:
