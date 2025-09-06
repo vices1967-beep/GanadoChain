@@ -30,6 +30,7 @@ contract GanadoRegistryUpgradeable is Initializable, AccessControlEnumerableUpgr
         string ipfsHash;
         uint256 amount;
         uint256[] animals;
+        string status; // ← NUEVO CAMPO AGREGADO
     }
 
     struct IoTData {
@@ -44,6 +45,14 @@ contract GanadoRegistryUpgradeable is Initializable, AccessControlEnumerableUpgr
     mapping(uint256 => Lote) public lotes;
     uint256 public nextLoteId;
 
+    // ← NUEVO EVENTO AGREGADO
+    event BatchStatusUpdated(
+        uint256 indexed batchId,
+        string newStatus,
+        bytes32 batchHash,
+        uint256 timestamp
+    );
+    
     event LoteCreated(uint256 indexed loteId, uint256 amount, string ipfsHash, address operator);
     event AnimalAssociated(uint256 indexed loteId, uint256 indexed tokenId);
     event IoTDataRegistered(uint256 indexed animalId, string deviceId, string dataHash, string metadata, uint256 timestamp);
@@ -66,12 +75,29 @@ contract GanadoRegistryUpgradeable is Initializable, AccessControlEnumerableUpgr
         nextLoteId = 1;
     }
 
+    // ← NUEVA FUNCIÓN AGREGADA
+    function updateBatchStatus(
+        uint256 batchId, 
+        string calldata newStatus, 
+        bytes32 batchHash
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(batchId > 0 && batchId < nextLoteId, "Invalid batch ID");
+        require(bytes(newStatus).length > 0, "Status cannot be empty");
+        
+        // Actualizar el estado del lote
+        lotes[batchId].status = newStatus;
+        
+        // Emitir evento
+        emit BatchStatusUpdated(batchId, newStatus, batchHash, block.timestamp);
+    }
+
     function createLote(address to, uint256 amount, string calldata ipfsHash, uint256[] calldata animals) external onlyRole(DAO_ROLE) returns (uint256) {
         uint256 id = nextLoteId++;
         Lote storage l = lotes[id];
         l.loteId = id;
         l.ipfsHash = ipfsHash;
         l.amount = amount;
+        l.status = "created"; // ← ESTADO INICIAL POR DEFECTO
 
         for (uint i = 0; i < animals.length; i++) {
             uint256 t = animals[i];

@@ -428,8 +428,8 @@ class BlockchainService:
     # ================== FUNCIONES DE SALUD Y IoT ==================
 
     def update_animal_health(self, animal_id, health_status, source="VETERINARIAN", 
-                           veterinarian_wallet="", iot_device_id="", notes="", 
-                           temperature=None, heart_rate=None):
+                        veterinarian_wallet="", iot_device_id="", notes="", 
+                        temperature=None, heart_rate=None):
         """Actualizar estado de salud en blockchain desde múltiples fuentes"""
         try:
             animal = Animal.objects.get(id=animal_id)
@@ -478,21 +478,23 @@ class BlockchainService:
                 except User.DoesNotExist:
                     print(f"⚠️ Veterinario con wallet {veterinarian_wallet} no encontrado")
             
-            # Buscar dispositivo IoT si es una actualización desde IoT
-            iot_device = None
+            # Manejar dispositivo IoT - CORRECCIÓN AQUÍ
+            device_id_for_record = ""
             if source == 'IOT_SENSOR' and iot_device_id:
                 try:
                     iot_device = IoTDevice.objects.get(device_id=iot_device_id)
+                    device_id_for_record = iot_device_id
                 except IoTDevice.DoesNotExist:
                     print(f"⚠️ Dispositivo IoT {iot_device_id} no encontrado")
+                    device_id_for_record = iot_device_id
             
-            # Guardar en base de datos
+            # Guardar en base de datos - CORRECCIÓN AQUÍ
             health_record = AnimalHealthRecord.objects.create(
                 animal=animal,
                 health_status=health_status,
                 source=source,
                 veterinarian=veterinarian,
-                iot_device=iot_device,
+                iot_device_id=device_id_for_record,  # ← CAMPO CORRECTO
                 notes=notes,
                 temperature=temperature,
                 heart_rate=heart_rate,
@@ -578,3 +580,95 @@ class BlockchainService:
     def wait_for_transaction(self, tx_hash, timeout=120):
         """Esperar por la confirmación de una transacción"""
         return self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
+    
+    # En blockchain/services.py, agrega este método:
+    def update_batch_status(self, batch, new_status, notes=None):
+        """
+        Actualiza el estado de un lote en la blockchain
+        """
+        try:
+            logger.info(f"Updating batch status on blockchain: {batch.name} -> {new_status}")
+            
+            # Verificar que el batch tenga blockchain_id
+            if not batch.blockchain_id:
+                logger.warning(f"Batch {batch.name} has no blockchain ID")
+                return {
+                    'success': False,
+                    'error': 'Batch has no blockchain ID'
+                }
+            
+            # Preparar datos para el hash
+            batch_data = {
+                'batch_id': batch.blockchain_id,
+                'name': batch.name,
+                'new_status': new_status,
+                'timestamp': int(time.time()),
+                'notes': notes or '',
+                'animal_count': batch.animals.count(),
+                'minted_animals_count': batch.animals.filter(token_id__isnull=False).count()
+            }
+            
+            # Convertir a JSON y calcular hash
+            batch_json = json.dumps(batch_data, sort_keys=True)
+            batch_hash = Web3.keccak(text=batch_json).hex()
+            
+            # Llamar al contrato
+            transaction = self.registry_contract.functions.updateBatchStatus(
+                batch.blockchain_id,
+                new_status,
+                batch_hash
+            ).build_transaction({
+                'from': self.owner_wallet,
+                'gas': 200000,
+                'gasPrice': self.w3.eth.gas_price,
+                'nonce': self.w3.eth.get_transaction_count(self.owner_wallet),
+            })
+            
+            # Firmar y enviar transacción
+            signed_txn = self.w3.eth.account.sign_transaction(transaction, self.private_key)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_txn.rawTransaction)
+            tx_receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+            
+            if tx_receipt.status == 1:
+                logger.info(f"Batch status updated successfully. TX: {tx_hash.hex()}")
+                
+                # Actualizar el batch
+                batch.blockchain_tx = tx_hash.hex()
+                batch.save()
+                
+                # Crear evento blockchain
+                from .models import BlockchainEvent
+                BlockchainEvent.objects.create(
+                    event_type='BATCH_STATUS_UPDATE',
+                    batch=batch,
+                    transaction_hash=tx_hash.hex(),
+                    status='CONFIRMED',
+                    details={
+                        'old_status': batch.status,
+                        'new_status': new_status,
+                        'notes': notes,
+                        'block_number': tx_receipt.blockNumber,
+                        'batch_data': batch_data
+                    }
+                )
+                
+                return {
+                    'success': True,
+                    'tx_hash': tx_hash.hex(),
+                    'block_number': tx_receipt.blockNumber,
+                    'batch_hash': batch_hash
+                }
+            else:
+                logger.error(f"Batch status update failed. TX: {tx_hash.hex()}")
+                return {
+                    'success': False,
+                    'error': 'Transaction failed',
+                    'tx_hash': tx_hash.hex()
+                }
+                
+        except Exception as e:
+            logger.error(f"Error updating batch status: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Error updating batch status: {str(e)}'
+            }

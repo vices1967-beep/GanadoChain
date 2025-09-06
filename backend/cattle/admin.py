@@ -7,6 +7,7 @@ from .blockchain_models import BlockchainEventState
 from .audit_models import CattleAuditTrail
 from iot.models import IoTDevice
 from django.contrib.auth import get_user_model
+from django.db.models import Count, Q  # ✅ IMPORTAR AQUÍ
 
 User = get_user_model()
 
@@ -377,15 +378,17 @@ class BatchAdmin(admin.ModelAdmin):
         'destination',
         'status_display',
         'minted_animals_count_display',
-        'total_animals_count',
+        'get_total_animals_count',  # ✅ Cambiado a método
         'created_by',
-        'created_at'
+        'created_at',
+        'on_blockchain'  # ✅ Nuevo campo agregado
     ]
     
     list_filter = [
         'status',
         'created_by',
-        'created_at'
+        'created_at',
+        'on_blockchain'  # ✅ Nuevo filtro
     ]
     
     search_fields = [
@@ -401,9 +404,10 @@ class BatchAdmin(admin.ModelAdmin):
         'created_at',
         'updated_at',
         'minted_animals_count_display',
-        'total_animals_count_display',
+        'get_total_animals_count_display',  # ✅ Cambiado a método
         'polyscan_link',
-        'audit_trail_link'
+        'audit_trail_link',
+        'on_blockchain'  # ✅ Solo lectura (se actualiza automáticamente)
     ]
     
     fieldsets = (
@@ -413,13 +417,14 @@ class BatchAdmin(admin.ModelAdmin):
                 'origin',
                 'destination',
                 'status',
-                'created_by'
+                'created_by',
+                'on_blockchain'  # ✅ Nuevo campo
             )
         }),
         ('Animales', {
             'fields': (
                 'minted_animals_count_display',
-                'total_animals_count_display',
+                'get_total_animals_count_display',  # ✅ Cambiado
             )
         }),
         ('Blockchain', {
@@ -458,9 +463,14 @@ class BatchAdmin(admin.ModelAdmin):
         return f"{obj.minted_animals_count} / {obj.total_animals_count}"
     minted_animals_count_display.short_description = 'Animales con NFT'
     
-    def total_animals_count_display(self, obj):
+    # ✅ NUEVOS MÉTODOS PARA REEMPLAZAR LA PROPERTY
+    def get_total_animals_count(self, obj):
         return obj.total_animals_count
-    total_animals_count_display.short_description = 'Total Animales'
+    get_total_animals_count.short_description = 'Total Animales'
+    
+    def get_total_animals_count_display(self, obj):
+        return obj.total_animals_count
+    get_total_animals_count_display.short_description = 'Total Animales'
     
     def polyscan_link(self, obj):
         if obj.polyscan_url:
@@ -477,6 +487,24 @@ class BatchAdmin(admin.ModelAdmin):
         if not change:  # Solo al crear
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+    
+    # ✅ OPCIÓN ALTERNATIVA: Usar annotations para mejor performance
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(
+            animals_count=Count('animals'),
+            minted_count=Count('animals', filter=Q(animals__token_id__isnull=False))
+        )
+    
+    def animals_count(self, obj):
+        return obj.animals_count
+    animals_count.short_description = 'Total Animales'
+    animals_count.admin_order_field = 'animals_count'
+    
+    def minted_count(self, obj):
+        return obj.minted_count
+    minted_count.short_description = 'Animales con NFT'
+    minted_count.admin_order_field = 'minted_count'
 
 @admin.register(CattleAuditTrail)
 class CattleAuditTrailAdmin(admin.ModelAdmin):

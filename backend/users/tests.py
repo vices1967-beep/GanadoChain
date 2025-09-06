@@ -108,7 +108,7 @@ class UserRegistrationTests(APITestCase):
         
         response = self.client.post(self.register_url, self.valid_payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('email', response.data.get('error', {}).get('details', {}))
+        self.assertIn('email', response.data)  # En lugar de response.data.get('error', {}).get('details', {})
     
     def test_registration_with_existing_wallet(self):
         """Test para registro con wallet existente"""
@@ -123,7 +123,7 @@ class UserRegistrationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         # Verificar la nueva estructura de respuesta
         error_details = response.data.get('error', {}).get('details', {})
-        self.assertIn('wallet_address', error_details)
+        self.assertIn('wallet_address', response.data)  # En lugar de error_details
     
     def test_registration_password_mismatch(self):
         """Test para contraseñas que no coinciden"""
@@ -132,7 +132,8 @@ class UserRegistrationTests(APITestCase):
         
         response = self.client.post(self.register_url, payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('password', response.data.get('error', {}).get('details', {}))
+        self.assertIn('password', response.data)
+        self.assertEqual(response.data['password'][0], 'Las contraseñas no coinciden.')
 
 class UserAuthenticationTests(APITestCase):
     """Tests para autenticación de usuarios"""

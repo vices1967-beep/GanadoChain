@@ -26,7 +26,7 @@ class AnimalSerializer(serializers.ModelSerializer):
             'current_batch', 'current_batch_name', 'is_minted', 'metadata_uri', 
             'polyscan_url', 'age', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'is_minted', 'metadata_uri', 'polyscan_url']
+        read_only_fields = ['created_at', 'updated_at', 'is_minted', 'metadata_uri', 'polyscan_url', 'owner']
     
     def get_age(self, obj):
         from datetime import date
@@ -125,35 +125,12 @@ class BatchCreateSerializer(serializers.ModelSerializer):
 class AnimalMintSerializer(serializers.Serializer):
     animal_id = serializers.IntegerField()
     wallet_address = serializers.CharField(max_length=42)
-    metadata_uri = serializers.CharField(required=False, allow_blank=True)
-
+    
     def validate_wallet_address(self, value):
         import re
         if not re.match(r'^(0x)?[0-9a-fA-F]{40}$', value):
             raise serializers.ValidationError('Formato de wallet inválido.')
         return value
-
-    def validate(self, data):
-        # Recuperamos el animal
-        try:
-            animal = Animal.objects.get(pk=data['animal_id'])
-        except Animal.DoesNotExist:
-            raise serializers.ValidationError({"animal_id": "El animal no existe."})
-
-        # Resolver metadata_uri
-        metadata_uri = data.get('metadata_uri')
-        if not metadata_uri:
-            metadata_uri = f'ipfs://{animal.ipfs_hash}' if animal.ipfs_hash else None
-
-        if not metadata_uri:
-            raise serializers.ValidationError({
-                "metadata_uri": "El animal no tiene ipfs_hash y no se envió metadata_uri."
-            })
-
-        # Reinyectar metadata_uri resuelto en data (para que la vista lo use)
-        data['metadata_uri'] = metadata_uri
-        return data
-
 
 class HealthDataSerializer(serializers.Serializer):
     device_id = serializers.CharField(max_length=100)
@@ -228,7 +205,7 @@ class AnimalTransferSerializer(serializers.Serializer):
         return value
 
 class BatchStatusUpdateSerializer(serializers.Serializer):
-    batch_id = serializers.IntegerField(min_value=1)
+    # batch_id = serializers.IntegerField(min_value=1)
     new_status = serializers.ChoiceField(choices=Batch.BATCH_STATUS_CHOICES)
     notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
 

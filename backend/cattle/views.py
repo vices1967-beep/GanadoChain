@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
 from .models import Animal, AnimalHealthRecord, Batch
 from .blockchain_models import BlockchainEventState
+from blockchain.services import BlockchainService  # Debe estar así
 from .audit_models import CattleAuditTrail
 from .serializers import (
     AnimalSerializer, 
@@ -288,12 +289,26 @@ class AnimalViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def blockchain_events(self, request, pk=None):
         animal = self.get_object()
-        events = animal.blockchain_events.all().order_by('-created_at')
+        # events = animal.blockchain_events.all().order_by('-created_at')
+        try:
+            from blockchain.models import BlockchainEvent  # ✅ Importar el modelo correcto
+            events = BlockchainEvent.objects.filter(animal=animal).order_by('-created_at')  # ✅ CORRECTO
+
         
-        from blockchain.serializers import BlockchainEventSerializer
-        serializer = BlockchainEventSerializer(events, many=True)
-        return Response(serializer.data)
-    
+            from blockchain.serializers import BlockchainEventSerializer
+            serializer = BlockchainEventSerializer(events, many=True)
+            return Response(serializer.data)
+        except ImportError:
+            return Response({
+                'error': 'Blockchain app not configured properly'
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        
+        except Exception as e:
+            logger.error(f"Error getting blockchain events for animal {pk}: {str(e)}")
+            return Response({
+                'error': f'Error retrieving blockchain events: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
     @action(detail=True, methods=['get'])
     def audit_trail(self, request, pk=None):
         animal = self.get_object()
@@ -369,6 +384,7 @@ class BatchViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
     
+    # En cattle/views.py, modifica el método update_status:
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
         """Actualizar estado del lote"""
@@ -384,24 +400,56 @@ class BatchViewSet(viewsets.ModelViewSet):
             new_status = serializer.validated_data['new_status']
             notes = serializer.validated_data.get('notes', '')
             
+            # Guardar el estado anterior
+            old_status = batch.status
+            
+            # Actualizar el estado
             batch.status = new_status
             batch.save()
             
-            # Registrar en blockchain si es necesario
-            if new_status in ['IN_TRANSIT', 'DELIVERED']:
+            # Registrar en blockchain si está en blockchain y el estado cambió
+            if batch.on_blockchain and old_status != new_status:
                 try:
                     from blockchain.services import BlockchainService
                     service = BlockchainService()
-                    service.update_batch_status(batch, new_status, notes)
+                    
+                    # Verificar si el método existe
+                    if hasattr(service, 'update_batch_status'):
+                        result = service.update_batch_status(batch, new_status, notes)
+                        
+                        if result['success']:
+                            logger.info(f"Batch status updated on blockchain: {batch.name}")
+                        else:
+                            logger.warning(f"Batch status update on blockchain failed: {result.get('error', 'Unknown error')}")
+                            # Revertir el cambio si falla en blockchain
+                            batch.status = old_status
+                            batch.save()
+                            return Response({
+                                'success': False,
+                                'error': f'Error en blockchain: {result.get("error", "Unknown error")}',
+                                'batch_id': batch.id
+                            }, status=status.HTTP_400_BAD_REQUEST)
+                    else:
+                        logger.info("update_batch_status method not available in BlockchainService")
+                        
                 except Exception as e:
                     logger.error(f"Error updating batch status on blockchain: {str(e)}")
+                    # Revertir el cambio si hay excepción
+                    batch.status = old_status
+                    batch.save()
+                    return Response({
+                        'success': False,
+                        'error': f'Error updating on blockchain: {str(e)}',
+                        'batch_id': batch.id
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             return Response({
                 'success': True,
                 'message': f'Estado del lote actualizado a {new_status}',
                 'batch_id': batch.id,
                 'batch_name': batch.name,
-                'new_status': new_status
+                'new_status': new_status,
+                'on_blockchain': batch.on_blockchain
             })
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -485,12 +533,26 @@ class BatchViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def blockchain_events(self, request, pk=None):
         batch = self.get_object()
-        events = batch.blockchain_events.all().order_by('-created_at')
+        # events = batch.blockchain_events.all().order_by('-created_at')
         
-        from blockchain.serializers import BlockchainEventSerializer
-        serializer = BlockchainEventSerializer(events, many=True)
-        return Response(serializer.data)
-    
+        try:
+            from blockchain.models import BlockchainEvent  # ✅ Importar el modelo correcto
+            events = BlockchainEvent.objects.filter(batch=batch).order_by('-created_at')  # ✅ CORRECTO
+            
+            from blockchain.serializers import BlockchainEventSerializer
+            serializer = BlockchainEventSerializer(events, many=True)
+            return Response(serializer.data)
+        except ImportError:
+            return Response({
+                'error': 'Blockchain app not configured properly'
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception as e:
+            logger.error(f"Error getting blockchain events for batch {pk}: {str(e)}")
+            return Response({
+                'error': f'Error retrieving blockchain events: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    # En cattle/views.py, en BatchViewSet, agrega:
     @action(detail=True, methods=['get'])
     def audit_trail(self, request, pk=None):
         batch = self.get_object()

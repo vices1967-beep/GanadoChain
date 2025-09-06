@@ -110,6 +110,10 @@ SIMPLE_JWT = {
 
 BLOCKCHAIN_RPC_URL = 'https://test.rpc.url'
 BLOCKCHAIN_CHAIN_ID = 80002
+ADMIN_PRIVATE_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'  # 64 chars hex
+GANADO_TOKEN_ADDRESS = '0x' + '1' * 40
+ANIMAL_NFT_ADDRESS = '0x' + '2' * 40
+REGISTRY_ADDRESS = '0x' + '3' * 40
 IPFS_GATEWAY_URL = 'https://ipfs.io/ipfs/'
 MAX_GAS_PRICE = 100000000000
 MIN_GAS_PRICE = 1000000000
@@ -119,6 +123,8 @@ SYNC_INTERVAL = 60
 HEALTH_CHECK_INTERVAL = 300
 MAX_RETRIES = 3
 VERSION = '1.0.0'
+
+CONTRACTS_DIR = os.path.join(BASE_DIR, '../artifacts/contracts')
 
 # ==============================================================================
 # CONFIGURACIONES ADICIONALES

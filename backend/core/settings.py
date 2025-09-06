@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_extensions',
     
     # Third-party
     'rest_framework',
@@ -424,3 +425,8 @@ if not DEBUG:
 INSTALLED_APPS += [
     'django.contrib.gis',
 ]
+
+# settings.py (al final)
+# Blockchain Configuration
+WEB3_PROVIDER = os.environ.get('WEB3_PROVIDER_URL', 'https://rpc-amoy.polygon.technology')
+CONTRACT_ADDRESS = os.environ.get('CONTRACT_ADDRESS', '0x04eF92BB7C1b3CDC22e941cEAB2206311C57ef68')

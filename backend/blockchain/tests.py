@@ -514,7 +514,7 @@ class BlockchainValidationTests(APITestCase):
         
         # CORRECCIÓN: Cambiar de 201 a 400 porque la wallet es inválida
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
+        self.assertIn('target_wallet', response.data)
     
     def test_invalid_transaction_hash(self):
         """Test para hash de transacción inválido"""
@@ -596,8 +596,9 @@ class BlockchainEdgeCaseTests(APITestCase):
         response = self.client.post(url, data, format='json')
         
         # CORRECCIÓN: Cambiar de 400 a 404 (no encontrado)
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertIn('error', response.data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('animal_id', response.data)
+        self.assertEqual(response.data['animal_id'][0], 'El animal no existe.')
 
 class BlockchainTransactionTests(APITestCase):
     """Tests para transacciones de blockchain"""

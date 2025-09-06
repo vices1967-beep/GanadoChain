@@ -230,6 +230,9 @@ class Batch(models.Model):
     blockchain_tx = models.CharField(max_length=66, blank=True, verbose_name="Transacción Blockchain",
                                    validators=[validate_transaction_hash])
     
+    # ✅ NUEVO CAMPO RECOMENDADO
+    on_blockchain = models.BooleanField(default=False, verbose_name="En Blockchain")
+    
     created_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -246,30 +249,52 @@ class Batch(models.Model):
         indexes = [
             models.Index(fields=['status']),
             models.Index(fields=['created_by']),
+            models.Index(fields=['on_blockchain']),  # ← Nuevo índice
         ]
 
     def __str__(self):
         return f"{self.name} - {self.get_status_display()}"
     
+    # ✅ PROPIEDADES PARA COMPATIBILIDAD CON ADMIN Y SERIALIZERS
     @property
     def minted_animals_count(self):
+        """Retorna el número de animales con NFT en el lote"""
         return self.animals.filter(token_id__isnull=False).count()
     
     @property
     def total_animals_count(self):
+        """Retorna el número total de animales en el lote"""
         return self.animals.count()
+    
+    @property
+    def is_minted(self):
+        """Compatibilidad con propiedad existente (para consistencia)"""
+        return bool(self.blockchain_tx)
+    
+    @property
+    def metadata_uri(self):
+        """Compatibilidad con propiedad existente"""
+        if self.ipfs_hash:
+            return f"ipfs://{self.ipfs_hash}"
+        return ""
     
     def clean(self):
         super().clean()
         # ✅ Las validaciones ahora se manejan con los validadores centralizados
     
     def save(self, *args, **kwargs):
+        # Normalizar hash de transacción antes de guardar
         if self.blockchain_tx and not self.blockchain_tx.startswith('0x'):
             self.blockchain_tx = '0x' + self.blockchain_tx
+        
+        # Actualizar automáticamente el estado on_blockchain
+        self.on_blockchain = bool(self.blockchain_tx)
+        
         super().save(*args, **kwargs)
     
     @property
     def polyscan_url(self):
+        """URL para ver la transacción en PolyScan"""
         if self.blockchain_tx:
             tx_hash = self.blockchain_tx
             if not tx_hash.startswith('0x'):
@@ -278,9 +303,71 @@ class Batch(models.Model):
         return None
     
     def polyscan_link(self):
+        """Enlace HTML para PolyScan"""
         if self.polyscan_url:
             return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', self.polyscan_url)
         return "No disponible"
     
     def get_absolute_url(self):
         return reverse('admin:cattle_batch_change', args=[self.id])
+    
+    # ✅ MÉTODOS ADICIONALES PARA FUNCIONALIDAD
+    def add_animal(self, animal):
+        """Agrega un animal al lote"""
+        if animal not in self.animals.all():
+            self.animals.add(animal)
+            # Actualizar el lote actual del animal
+            animal.update_current_batch(self)
+    
+    def remove_animal(self, animal):
+        """Remueve un animal del lote"""
+        if animal in self.animals.all():
+            self.animals.remove(animal)
+            # Quitar el lote actual del animal
+            animal.update_current_batch(None)
+    
+    def can_be_minted(self):
+        """Verifica si el lote puede ser minteado"""
+        if self.blockchain_tx:
+            return False  # Ya está minteado
+        
+        # Verificar que todos los animales tengan dueño y estén sanos
+        animals = self.animals.all()
+        if not animals.exists():
+            return False
+        
+        # Todos los animales deben tener el mismo dueño
+        owners = set(animal.owner_id for animal in animals)
+        if len(owners) > 1:
+            return False
+        
+        # Todos los animales deben estar sanos o en observación
+        invalid_statuses = [HealthStatus.SICK, HealthStatus.QUARANTINED]
+        if animals.filter(health_status__in=invalid_statuses).exists():
+            return False
+        
+        return True
+    
+    def get_owner(self):
+        """Obtiene el dueño principal del lote (primer animal)"""
+        first_animal = self.animals.first()
+        return first_animal.owner if first_animal else None
+    
+    def update_status(self, new_status, user=None):
+        """Actualiza el estado del lote con registro de auditoría"""
+        old_status = self.status
+        self.status = new_status
+        self.save()
+        
+        # Registrar cambio de estado en auditoría
+        if user:
+            from cattle.audit_models import CattleAuditTrail
+            CattleAuditTrail.objects.create(
+                object_type='batch',
+                object_id=self.id,
+                action_type='STATUS_CHANGE',
+                user=user,
+                previous_state={'status': old_status},
+                new_state={'status': new_status},
+                changes=f'Estado cambiado de {old_status} a {new_status}'
+            )
