@@ -11,18 +11,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # CONFIGURACIÓN BÁSICA
 # ==============================================================================
 
-SECRET_KEY = 'test-secret-key-for-testing-only'
+SECRET_KEY = 'test-secret-key-for-testing-only-1234567890abcdefghijklmnopqrstuvwxyz'
 DEBUG = True
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*', 'testserver']
 
 # ==============================================================================
-# CONFIGURACIÓN DE BASE DE DATOS (SQLite para testing)
+# CONFIGURACIÓN DE BASE DE DATOS (SQLite en memoria para testing más rápido)
 # ==============================================================================
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'test_db.sqlite3',
+        'NAME': ':memory:',  # Usar base de datos en memoria para tests más rápidos
+        'TEST': {
+            'NAME': ':memory:',
+        }
     }
 }
 
@@ -84,33 +87,42 @@ TEMPLATES = [
 ]
 
 # ==============================================================================
-# REST FRAMEWORK
+# REST FRAMEWORK - Configuración optimizada para testing
 # ==============================================================================
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'TEST_REQUEST_DEFAULT_FORMAT': 'json',
+    'DEFAULT_THROTTLE_CLASSES': [],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': None,
+        'anon': None,
+    }
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),  # Más corto para tests
+    'REFRESH_TOKEN_LIFETIME': timedelta(hours=1),
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
 }
 
 # ==============================================================================
-# CONFIGURACIÓN BLOCKCHAIN PARA TESTING
+# CONFIGURACIÓN BLOCKCHAIN PARA TESTING (Mocks)
 # ==============================================================================
 
-BLOCKCHAIN_RPC_URL = 'https://test.rpc.url'
+BLOCKCHAIN_RPC_URL = 'https://polygon-amoy.g.alchemy.com/v2/test'
 BLOCKCHAIN_CHAIN_ID = 80002
-ADMIN_PRIVATE_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'  # 64 chars hex
+ADMIN_PRIVATE_KEY = '0x' + '1' * 64  # 64 chars hex con prefijo 0x
 GANADO_TOKEN_ADDRESS = '0x' + '1' * 40
 ANIMAL_NFT_ADDRESS = '0x' + '2' * 40
 REGISTRY_ADDRESS = '0x' + '3' * 40
@@ -118,16 +130,16 @@ IPFS_GATEWAY_URL = 'https://ipfs.io/ipfs/'
 MAX_GAS_PRICE = 100000000000
 MIN_GAS_PRICE = 1000000000
 DEFAULT_GAS_LIMIT = 21000
-TRANSACTION_TIMEOUT = 120
-SYNC_INTERVAL = 60
-HEALTH_CHECK_INTERVAL = 300
-MAX_RETRIES = 3
-VERSION = '1.0.0'
+TRANSACTION_TIMEOUT = 30  # Reducido para tests
+SYNC_INTERVAL = 10  # Reducido para tests
+HEALTH_CHECK_INTERVAL = 60  # Reducido para tests
+MAX_RETRIES = 2  # Reducido para tests
+VERSION = '1.0.0-test'
 
 CONTRACTS_DIR = os.path.join(BASE_DIR, '../artifacts/contracts')
 
 # ==============================================================================
-# CONFIGURACIONES ADICIONALES
+# CONFIGURACIONES ADICIONALES OPTIMIZADAS PARA TESTING
 # ==============================================================================
 
 LANGUAGE_CODE = 'es-es'
@@ -136,13 +148,61 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 AUTH_USER_MODEL = 'users.User'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Password hashers más rápidos para testing
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.MD5PasswordHasher',
+]
+
 # Desactivar logging durante tests
-LOGGING_CONFIG = None
+import logging
+logging.disable(logging.CRITICAL)
+
+# Configuración de CORS para testing
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+
+# Configuración de email para testing
+EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+
+# Cache para testing
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+    }
+}
 
 # Configuración para testing
 TESTING = True
+TEST_RUNNER = 'django.test.runner.DiscoverRunner'
+
+# Deshabilitar checks que no son necesarios en testing
+SILENCED_SYSTEM_CHECKS = [
+    'security.W001',  # No need for security warnings in tests
+    'security.W002',  # No need for security warnings in tests
+    'security.W003',  # No need for security warnings in tests
+    'security.W004',  # No need for security warnings in tests
+    'security.W005',  # No need for security warnings in tests
+    'security.W006',  # No need for security warnings in tests
+    'security.W007',  # No need for security warnings in tests
+    'security.W008',  # No need for security warnings in tests
+    'security.W009',  # No need for security warnings in tests
+    'security.W010',  # No need for security warnings in tests
+    'security.W011',  # No need for security warnings in tests
+    'security.W012',  # No need for security warnings in tests
+    'security.W013',  # No need for security warnings in tests
+    'security.W014',  # No need for security warnings in tests
+    'security.W015',  # No need for security warnings in tests
+    'security.W016',  # No need for security warnings in tests
+    'security.W017',  # No need for security warnings in tests
+    'security.W018',  # No need for security warnings in tests
+    'security.W019',  # No need for security warnings in tests
+    'security.W020',  # No need for security warnings in tests
+    'security.W021',  # No need for security warnings in tests
+]

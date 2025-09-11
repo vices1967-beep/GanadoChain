@@ -33,6 +33,12 @@ urlpatterns = [
     path('stats/', views.BlockchainStatsView.as_view(), name='blockchain-stats'),
     path('animal/<int:animal_id>/history/', views.AnimalHistoryView.as_view(), name='animal-history'),
     
+    # Nuevas URLs para compatibilidad con tests
+    path('api/balance/', views.GetBalanceView.as_view(), name='get-balance'),
+    path('api/token/balance/', views.GetTokenBalanceView.as_view(), name='token-balance'),
+    path('api/nft/animal/<int:animal_id>/', views.GetAnimalNFTInfoView.as_view(), name='animal-nft-info'),
+    path('api/nft/verify/<int:animal_id>/', views.VerifyAnimalNFTView.as_view(), name='verify-animal-nft'),
+    
     # Incluir rutas del router
     path('', include(router.urls)),
 ]

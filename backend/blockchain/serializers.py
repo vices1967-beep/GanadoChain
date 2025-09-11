@@ -179,38 +179,36 @@ class AssignRoleSerializer(serializers.Serializer):
 class MintNFTSerializer(serializers.Serializer):
     animal_id = serializers.IntegerField()
     owner_wallet = serializers.CharField(max_length=42)
-    metadata_uri = serializers.CharField(required=False, allow_blank=True)
+    metadata_uri = serializers.CharField(required=True)
     operational_ipfs = serializers.CharField(required=False, allow_blank=True)
     
     def validate_owner_wallet(self, value):
+        # Normalizar la dirección
+        if value and not value.startswith('0x'):
+            value = '0x' + value
+        
         w3 = Web3()
         if not w3.is_address(value):
             raise serializers.ValidationError("Dirección de wallet inválida")
+        
+        # Asegurar que tenga exactamente 42 caracteres
+        if len(value) != 42:
+            raise serializers.ValidationError("La dirección debe tener exactamente 42 caracteres")
+        
         return value
-
+    
+    def validate_metadata_uri(self, value):
+        if not value:
+            raise serializers.ValidationError("metadata_uri es requerido")
+        if not value.startswith('ipfs://'):
+            raise serializers.ValidationError("metadata_uri debe comenzar con 'ipfs://'")
+        return value
+    
     def validate(self, data):
-        from cattle.models import Animal  # import local para evitar dependencias circulares
-        animal_id = data.get("animal_id")
-        metadata_uri = data.get("metadata_uri")
-
-        # Buscar el animal
-        try:
-            animal = Animal.objects.get(pk=animal_id)
-        except Animal.DoesNotExist:
-            raise serializers.ValidationError({"animal_id": "El animal no existe."})
-
-        # Resolver metadata_uri: request o ipfs_hash
-        if not metadata_uri:
-            metadata_uri = f'ipfs://{animal.ipfs_hash}' if animal.ipfs_hash else None
-
-        if not metadata_uri:
-            raise serializers.ValidationError({
-                "metadata_uri": "El animal no tiene ipfs_hash y no se envió metadata_uri."
-            })
-
-        data["metadata_uri"] = metadata_uri
+        # Validación adicional cruzada si es necesaria
         return data
 
+    # ... el resto del serializer ...
 class RegisterAnimalSerializer(serializers.Serializer):
     animal_id = serializers.IntegerField(min_value=1)
     metadata = serializers.JSONField()

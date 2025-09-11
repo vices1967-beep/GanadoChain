@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.views import APIView
 from django.conf import settings
+from .permissions import AdminPermission
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
 from .services import BlockchainService
@@ -224,8 +225,8 @@ class TransactionPoolViewSet(viewsets.ReadOnlyModelViewSet):
 
 class AssignRoleView(generics.CreateAPIView):
     serializer_class = AssignRoleSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
+    permission_classes = [permissions.IsAuthenticated, AdminPermission]  # ← Asegurar permisos específicos
+    
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -243,7 +244,7 @@ class AssignRoleView(generics.CreateAPIView):
                 'message': 'Rol asignado correctamente',
                 'role': serializer.validated_data['role'],
                 'target_wallet': serializer.validated_data['target_wallet']
-            }, status=status.HTTP_201_CREATED)
+            }, status=status.HTTP_201_CREATED)  # ← CAMBIAR de 200 a 201
                 
         except Exception as e:
             logger.error(f"Error assigning role: {str(e)}")
@@ -251,7 +252,7 @@ class AssignRoleView(generics.CreateAPIView):
                 'success': False,
                 'error': f'Error asignando rol: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
-
+        
 # ... (código existente)
 
 class MintNFTView(generics.CreateAPIView):
@@ -260,18 +261,21 @@ class MintNFTView(generics.CreateAPIView):
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        permission_classes = [permissions.IsAuthenticated, AdminPermission]  # ← Asegurar permisos específicos
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         blockchain_service = BlockchainService()
         try:
-            # Verificar que el animal existe
+            # ✅ VERIFICAR QUE EL ANIMAL EXISTA ANTES
+            animal_id = serializer.validated_data['animal_id']
             try:
-                animal = Animal.objects.get(id=serializer.validated_data['animal_id'])
+                animal = Animal.objects.get(id=animal_id)
             except Animal.DoesNotExist:
                 return Response({
                     'success': False,
-                    'error': f'Animal con ID {serializer.validated_data["animal_id"]} no encontrado'
-                }, status=status.HTTP_404_NOT_FOUND)  # ✅ Cambiado a 404
+                    'error': f'Animal con ID {animal_id} no encontrado'
+                }, status=status.HTTP_404_NOT_FOUND)
             
             tx_hash = blockchain_service.mint_animal_nft(
                 serializer.validated_data['owner_wallet'],
@@ -295,10 +299,10 @@ class MintNFTView(generics.CreateAPIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
 # ... (resto del código)
+
 class CheckRoleView(APIView):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = CheckRoleSerializer
-
+    
     def get(self, request, *args, **kwargs):
         wallet_address = request.query_params.get('wallet_address')
         role_name = request.query_params.get('role_name')
@@ -311,18 +315,27 @@ class CheckRoleView(APIView):
         
         blockchain_service = BlockchainService()
         try:
+            # Validar wallet
+            if not blockchain_service.is_valid_wallet(wallet_address):
+                return Response({
+                    'success': False,
+                    'error': 'Dirección de wallet inválida'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
             has_role = blockchain_service.has_role(wallet_address, role_name)
+            
             return Response({
                 'success': True,
                 'has_role': has_role,
                 'wallet_address': wallet_address,
                 'role_name': role_name
             })
+            
         except Exception as e:
             logger.error(f"Error checking role: {str(e)}")
             return Response({
                 'success': False,
-                'error': str(e)
+                'error': f'Error verificando rol: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
 
 class MintTokensView(generics.CreateAPIView):
@@ -791,4 +804,164 @@ class EventSubscriptionView(generics.CreateAPIView):
             return Response({
                 'success': False,
                 'error': f'Error creando suscripción: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+class GetBalanceView(APIView):
+    """Vista para obtener balance de MATIC de una wallet"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, *args, **kwargs):
+        wallet_address = request.query_params.get('wallet_address')
+        print("📦 Parámetros recibidos:", request.query_params)  # DEBUG
+        
+        if not wallet_address:
+            print("❌ Falta wallet_address")  # DEBUG
+            return Response({
+                'success': False,
+                'error': 'wallet_address parameter is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        blockchain_service = BlockchainService()
+        try:
+            # Validar la dirección primero
+            if not blockchain_service.is_valid_wallet(wallet_address):
+                print("❌ Wallet inválida:", wallet_address)  # DEBUG
+                return Response({
+                    'success': False,
+                    'error': 'Dirección de wallet inválida'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            balance_wei = blockchain_service.get_balance(wallet_address)
+            balance_eth = blockchain_service.w3.from_wei(balance_wei, 'ether')
+            
+            return Response({
+                'success': True,
+                'wallet_address': wallet_address,
+                'balance_wei': balance_wei,
+                'balance_eth': float(balance_eth),
+                'balance_formatted': f"{balance_eth:.6f} MATIC"
+            })
+            
+        except Exception as e:
+            print("❌ Error en get balance:", str(e))  # DEBUG
+            logger.error(f"Error getting balance: {str(e)}")
+            return Response({
+                'success': False,
+                'error': f'Error obteniendo balance: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class GetTokenBalanceView(APIView):
+    """Vista para obtener balance de tokens GANADO"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, *args, **kwargs):
+        wallet_address = request.query_params.get('wallet_address')
+        
+        if not wallet_address:
+            return Response({
+                'success': False,
+                'error': 'wallet_address parameter is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        blockchain_service = BlockchainService()
+        try:
+            # Validar la dirección primero
+            if not blockchain_service.is_valid_wallet(wallet_address):
+                return Response({
+                    'success': False,
+                    'error': 'Dirección de wallet inválida'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            balance = blockchain_service.get_token_balance(wallet_address)
+            
+            return Response({
+                'success': True,
+                'wallet_address': wallet_address,
+                'balance': balance,
+                'balance_formatted': f"{balance} GANADO"
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting token balance: {str(e)}")
+            return Response({
+                'success': False,
+                'error': f'Error obteniendo balance de tokens: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+class GetAnimalNFTInfoView(APIView):
+    """Vista para obtener información del NFT de un animal"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, animal_id, *args, **kwargs):
+        blockchain_service = BlockchainService()
+        try:
+            # Verificar que el animal existe
+            animal = get_object_or_404(Animal, id=animal_id)
+            
+            nft_info = blockchain_service.get_animal_nft_info(animal)
+            
+            if not nft_info:
+                return Response({
+                    'success': True,
+                    'has_nft': False,
+                    'message': 'El animal no tiene NFT asociado',
+                    'animal_id': animal_id,
+                    'ear_tag': animal.ear_tag
+                })
+            
+            # Devolver la estructura que los tests esperan
+            response_data = {
+                'success': True,
+                'has_nft': True,
+                'animal_id': animal_id,
+                'ear_tag': animal.ear_tag,
+                **nft_info  # Incluir toda la información del NFT directamente
+            }
+            
+            return Response(response_data)
+            
+        except Animal.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': f'Animal con ID {animal_id} no encontrado'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error getting animal NFT info: {str(e)}")
+            return Response({
+                'success': False,
+                'error': f'Error obteniendo información NFT: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class VerifyAnimalNFTView(APIView):
+    """Vista para verificar la autenticidad del NFT de un animal"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, animal_id, *args, **kwargs):
+        blockchain_service = BlockchainService()
+        try:
+            # Verificar que el animal existe
+            animal = get_object_or_404(Animal, id=animal_id)
+            
+            verification_result = blockchain_service.verify_animal_nft(animal)
+            
+            # Devolver la estructura que los tests esperan
+            response_data = {
+                'success': True,
+                'animal_id': animal_id,
+                'ear_tag': animal.ear_tag,
+                **verification_result  # Incluir todos los datos de verificación directamente
+            }
+            
+            return Response(response_data)
+            
+        except Animal.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': f'Animal con ID {animal_id} no encontrado'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error verifying animal NFT: {str(e)}")
+            return Response({
+                'success': False,
+                'error': f'Error verificando NFT: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)

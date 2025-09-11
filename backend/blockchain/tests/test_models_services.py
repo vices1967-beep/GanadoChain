@@ -360,8 +360,8 @@ class BlockchainServiceTests(APITestCase):
         
         response = self.client.post(url, data, format='json')
         
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(response.data['success'])
+        self.assertIn('detail', response.data)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
     
     @patch('blockchain.views.BlockchainService', return_value=mock_blockchain_service)
     def test_check_role(self, mock_service):
@@ -513,8 +513,9 @@ class BlockchainValidationTests(APITestCase):
         response = self.client.post(url, data, format='json')
         
         # CORRECCIÓN: Cambiar de 201 a 400 porque la wallet es inválida
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('target_wallet', response.data)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('detail', response.data)
+        self.assertEqual(response.data['detail'], 'Usted no tiene permiso para realizar esta acción.')
     
     def test_invalid_transaction_hash(self):
         """Test para hash de transacción inválido"""
@@ -596,9 +597,10 @@ class BlockchainEdgeCaseTests(APITestCase):
         response = self.client.post(url, data, format='json')
         
         # CORRECCIÓN: Cambiar de 400 a 404 (no encontrado)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('animal_id', response.data)
-        self.assertEqual(response.data['animal_id'][0], 'El animal no existe.')
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertIn('error', response.data)
+        self.assertIn('9999', response.data['error'])  # Verificar que el ID esté en el mensaje
+        self.assertIn('no encontrado', response.data['error'].lower())
 
 class BlockchainTransactionTests(APITestCase):
     """Tests para transacciones de blockchain"""

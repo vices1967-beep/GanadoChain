@@ -10,23 +10,30 @@ from decimal import Decimal
 
 User = get_user_model()
 
+# users/serializers.py - Modificar EthereumAddressField
 class EthereumAddressField(serializers.CharField):
     """Campo personalizado para validar direcciones Ethereum"""
+    
     def __init__(self, **kwargs):
         kwargs['max_length'] = 42
         super().__init__(**kwargs)
     
     def to_internal_value(self, data):
         data = super().to_internal_value(data)
-        # Normalizar a minúsculas y asegurar prefijo 0x
-        if data and not data.startswith('0x'):
-            data = '0x' + data
-        return data.lower()
+        
+        if data:
+            # Normalizar a minúsculas y asegurar prefijo 0x
+            if not data.startswith('0x'):
+                data = '0x' + data
+            data = data.lower()
+            
+            # Validar formato Ethereum (0x + 40 caracteres hex)
+            if not re.match(r'^0x[0-9a-f]{40}$', data):
+                raise serializers.ValidationError('Dirección Ethereum inválida')
+        
+        return data
     
-    def validate(self, value):
-        if value and not re.match(r'^0x[0-9a-f]{40}$', value):
-            raise serializers.ValidationError('Dirección Ethereum inválida')
-        return value
+    # Eliminar el método validate ya que la validación se hace en to_internal_value
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])

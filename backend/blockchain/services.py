@@ -10,6 +10,9 @@ from cattle.models import Animal
 from users.models import User
 from iot.models import IoTDevice
 from cattle.models import AnimalHealthRecord, HealthStatus
+# Al inicio del archivo services.py, busca o añade:
+import logging
+logger = logging.getLogger(__name__)
 
 class BlockchainService:
     def __init__(self):
@@ -618,10 +621,10 @@ class BlockchainService:
                 new_status,
                 batch_hash
             ).build_transaction({
-                'from': self.owner_wallet,
+                'from': self.wallet_address,
                 'gas': 200000,
                 'gasPrice': self.w3.eth.gas_price,
-                'nonce': self.w3.eth.get_transaction_count(self.owner_wallet),
+                'nonce': self.w3.eth.get_transaction_count(self.wallet_address),
             })
             
             # Firmar y enviar transacción
@@ -636,18 +639,18 @@ class BlockchainService:
                 batch.blockchain_tx = tx_hash.hex()
                 batch.save()
                 
-                # Crear evento blockchain
+                # Crear evento blockchain - CORREGIDO: usar metadata en lugar de status y details
                 from .models import BlockchainEvent
                 BlockchainEvent.objects.create(
                     event_type='BATCH_STATUS_UPDATE',
                     batch=batch,
                     transaction_hash=tx_hash.hex(),
-                    status='CONFIRMED',
-                    details={
+                    block_number=tx_receipt.blockNumber,  # ← AÑADIR block_number
+                    metadata={  # ← USAR metadata PARA TODA LA INFORMACIÓN ADICIONAL
+                        'status': 'CONFIRMED',
                         'old_status': batch.status,
                         'new_status': new_status,
                         'notes': notes,
-                        'block_number': tx_receipt.blockNumber,
                         'batch_data': batch_data
                     }
                 )
