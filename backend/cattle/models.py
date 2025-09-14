@@ -196,6 +196,11 @@ class AnimalHealthRecord(models.Model):
             if not tx_hash.startswith('0x'):
                 tx_hash = '0x' + tx_hash
             return f"https://amoy.polygonscan.com/tx/{tx_hash}"
+        elif self.blockchain_hash:
+            tx_hash = self.blockchain_hash
+            if not tx_hash.startswith('0x'):
+                tx_hash = '0x' + tx_hash
+            return f"https://amoy.polygonscan.com/tx/{tx_hash}"
         return None
     
     def polyscan_link(self):
@@ -371,3 +376,136 @@ class Batch(models.Model):
                 new_state={'status': new_status},
                 changes=f'Estado cambiado de {old_status} a {new_status}'
             )
+
+class AnimalGeneticProfile(models.Model):
+    animal = models.OneToOneField(Animal, on_delete=models.CASCADE, related_name='genetic_profile')
+    genetic_marker = models.CharField(max_length=100, blank=True)
+    breed_composition = models.JSONField(default=dict)
+    parent_male = models.ForeignKey(Animal, on_delete=models.SET_NULL, null=True, 
+                                  related_name='offspring_male', blank=True)
+    parent_female = models.ForeignKey(Animal, on_delete=models.SET_NULL, null=True, 
+                                    related_name='offspring_female', blank=True)
+    genetic_defects = models.JSONField(null=True, blank=True)
+    ipfs_hash = models.CharField(max_length=255, blank=True)
+    blockchain_hash = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'cattle_animal_genetic_profile'
+        verbose_name = "Perfil Genético"
+        verbose_name_plural = "Perfiles Genéticos"
+
+    def __str__(self):
+        return f"Perfil Genético - {self.animal.ear_tag}"
+    
+    @property
+    def polyscan_url(self):
+        """URL para ver la transacción en PolyScan"""
+        if self.blockchain_hash:
+            tx_hash = self.blockchain_hash
+            if not tx_hash.startswith('0x'):
+                tx_hash = '0x' + tx_hash
+            return f"https://amoy.polygonscan.com/tx/{tx_hash}"
+        return None
+    
+    def polyscan_link(self):
+        """Enlace HTML para PolyScan"""
+        if self.polyscan_url:
+            return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', self.polyscan_url)
+        return "No disponible"
+
+class FeedingRecord(models.Model):
+    animal = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='feeding_records')
+    feed_type = models.CharField(max_length=100)
+    quantity_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    feeding_date = models.DateTimeField()
+    location = models.CharField(max_length=255)
+    supplier = models.ForeignKey('users.User', on_delete=models.CASCADE, 
+                               limit_choices_to={'role': 'supplier'})
+    blockchain_hash = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'cattle_feeding_record'
+        verbose_name = "Registro de Alimentación"
+        verbose_name_plural = "Registros de Alimentación"
+        indexes = [
+            models.Index(fields=['animal', 'feeding_date']),
+            models.Index(fields=['supplier', 'feeding_date']),
+        ]
+        ordering = ['-feeding_date']
+
+    def __str__(self):
+        return f"Alimentación - {self.animal.ear_tag} - {self.feeding_date}"
+    
+    @property
+    def polyscan_url(self):
+        """URL para ver la transacción en PolyScan"""
+        if self.blockchain_hash:
+            tx_hash = self.blockchain_hash
+            if not tx_hash.startswith('0x'):
+                tx_hash = '0x' + tx_hash
+            return f"https://amoy.polygonscan.com/tx/{tx_hash}"
+        return None
+    
+    def polyscan_link(self):
+        """Enlace HTML para PolyScan"""
+        if self.polyscan_url:
+            return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', self.polyscan_url)
+        return "No disponible"
+
+# Añadir también para los modelos de blockchain_models.py si es necesario
+# desde cattle.blockchain_models import AnimalCertification, CertificationStandard
+
+# class AnimalCertification(models.Model):
+#     animal = models.ForeignKey(Animal, on_delete=models.CASCADE, related_name='certifications')
+#     standard = models.ForeignKey('CertificationStandard', on_delete=models.CASCADE)
+#     certification_date = models.DateField()
+#     expiration_date = models.DateField()
+#     revoked = models.BooleanField(default=False)
+#     certifying_authority = models.ForeignKey(User, on_delete=models.CASCADE)
+#     blockchain_hash = models.CharField(max_length=255, blank=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+
+#     class Meta:
+#         db_table = 'cattle_animal_certification'
+#         verbose_name = "Certificación de Animal"
+#         verbose_name_plural = "Certificaciones de Animales"
+
+#     def __str__(self):
+#         return f"Certificación - {self.animal.ear_tag} - {self.standard.name}"
+    
+#     @property
+#     def polyscan_url(self):
+#         """URL para ver la transacción en PolyScan"""
+#         if self.blockchain_hash:
+#             tx_hash = self.blockchain_hash
+#             if not tx_hash.startswith('0x'):
+#                 tx_hash = '0x' + tx_hash
+#             return f"https://amoy.polygonscan.com/tx/{tx_hash}"
+#         return None
+    
+#     def polyscan_link(self):
+#         """Enlace HTML para PolyScan"""
+#         if self.polyscan_url:
+#             return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', self.polyscan_url)
+#         return "No disponible"
+
+# class CertificationStandard(models.Model):
+#     name = models.CharField(max_length=100)
+#     description = models.TextField()
+#     issuing_authority = models.CharField(max_length=100)
+#     validity_days = models.IntegerField()
+#     is_active = models.BooleanField(default=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+
+#     class Meta:
+#         db_table = 'cattle_certification_standard'
+#         verbose_name = "Estándar de Certificación"
+#         verbose_name_plural = "Estándares de Certificación"
+
+#     def __str__(self):
+#         return self.name

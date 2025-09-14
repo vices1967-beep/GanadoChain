@@ -707,3 +707,48 @@ def cattle_stats(request):
         stats['animals_by_breed'][breed] = count
     
     return Response(stats)
+
+from .models import AnimalGeneticProfile, FeedingRecord
+from .serializers import AnimalGeneticProfileSerializer, FeedingRecordSerializer
+
+class AnimalGeneticProfileViewSet(viewsets.ModelViewSet):
+    serializer_class = AnimalGeneticProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = AnimalGeneticProfile.objects.all()
+        
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(animal__owner=self.request.user)
+        
+        animal_id = self.request.query_params.get('animal_id')
+        if animal_id:
+            queryset = queryset.filter(animal_id=animal_id)
+            
+        return queryset
+
+class FeedingRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = FeedingRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = FeedingRecord.objects.all()
+        
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(
+                Q(animal__owner=self.request.user) |
+                Q(supplier=self.request.user)
+            )
+        
+        animal_id = self.request.query_params.get('animal_id')
+        supplier_id = self.request.query_params.get('supplier_id')
+        feed_type = self.request.query_params.get('feed_type')
+        
+        if animal_id:
+            queryset = queryset.filter(animal_id=animal_id)
+        if supplier_id:
+            queryset = queryset.filter(supplier_id=supplier_id)
+        if feed_type:
+            queryset = queryset.filter(feed_type=feed_type)
+            
+        return queryset.order_by('-feeding_date')

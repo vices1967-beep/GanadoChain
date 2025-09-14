@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.utils.html import format_html
 from django.urls import reverse
 from .models import User, UserActivityLog, UserPreference, APIToken
-from .reputation_models import UserRole, ReputationScore
+from .reputation_models import UserRole, ReputationScore, RewardDistribution, StakingPool
 from .notification_models import Notification
 import json
 
@@ -32,7 +32,7 @@ class CustomUserAdmin(UserAdmin):
         'verification_date', 'last_blockchain_sync',
         'is_active_display', 'is_blockchain_active_display',
         'reputation_scores_link', 'user_roles_link',
-        'notifications_link'
+        'notifications_link', 'rewards_link', 'staking_pool_link'
     ]
     
     fieldsets = (
@@ -55,7 +55,9 @@ class CustomUserAdmin(UserAdmin):
             'fields': (
                 'reputation_scores_link',
                 'user_roles_link',
-                'notifications_link'
+                'notifications_link',
+                'rewards_link',
+                'staking_pool_link'
             ),
             'classes': ('collapse',)
         }),
@@ -188,6 +190,16 @@ class CustomUserAdmin(UserAdmin):
         url = reverse('admin:users_notification_changelist') + f'?user__id__exact={obj.id}'
         return format_html('<a href="{}">🔔 Ver Notificaciones</a>', url)
     notifications_link.short_description = 'Notificaciones'
+    
+    def rewards_link(self, obj):
+        url = reverse('admin:users_rewarddistribution_changelist') + f'?user__id__exact={obj.id}'
+        return format_html('<a href="{}">💰 Ver Recompensas</a>', url)
+    rewards_link.short_description = 'Recompensas'
+    
+    def staking_pool_link(self, obj):
+        url = reverse('admin:users_stakingpool_changelist') + f'?user__id__exact={obj.id}'
+        return format_html('<a href="{}">🏦 Ver Staking</a>', url)
+    staking_pool_link.short_description = 'Staking'
 
 @admin.register(UserActivityLog)
 class UserActivityLogAdmin(admin.ModelAdmin):
@@ -267,7 +279,9 @@ class UserActivityLogAdmin(admin.ModelAdmin):
     severity_display.short_description = 'Severidad'
     
     def short_tx_hash(self, obj):
-        return obj.short_tx_hash
+        if obj.blockchain_tx_hash:
+            return f"{obj.blockchain_tx_hash[:8]}...{obj.blockchain_tx_hash[-6:]}"
+        return "—"
     short_tx_hash.short_description = 'Tx Hash'
     
     def metadata_prettified(self, obj):
@@ -418,7 +432,8 @@ class APITokenAdmin(admin.ModelAdmin):
     is_active_display.short_description = 'Estado'
     
     def is_expired_display(self, obj):
-        if obj.is_expired:
+        from django.utils import timezone
+        if obj.expires_at and obj.expires_at < timezone.now():
             return format_html('<span style="color: red;">❌ Expirado</span>')
         return format_html('<span style="color: green;">✅ Vigente</span>')
     is_expired_display.short_description = 'Expirado'
@@ -726,5 +741,253 @@ class NotificationAdmin(admin.ModelAdmin):
         return "—"
     related_object_link.short_description = 'Objeto Relacionado'
 
+@admin.register(RewardDistribution)
+class RewardDistributionAdmin(admin.ModelAdmin):
+    list_display = [
+        'user_link', 'action_type_display', 'action_id_display',
+        'tokens_awarded_display', 'distribution_date', 
+        'is_claimed_display', 'polyscan_link'
+    ]
+    
+    list_filter = [
+        'action_type', 'is_claimed', 'distribution_date'
+    ]
+    
+    search_fields = [
+        'user__username', 'user__email', 'action_type',
+        'transaction_hash', 'action_id'
+    ]
+    
+    readonly_fields = [
+        'distribution_date', 'user_link', 'action_type_display',
+        'action_id_display', 'is_claimed_display', 'polyscan_link'
+    ]
+    
+    fieldsets = (
+        ('Información de Recompensa', {
+            'fields': (
+                'user_link', 'action_type', 'action_type_display',
+                'action_id', 'action_id_display'
+            )
+        }),
+        ('Detalles de la Recompensa', {
+            'fields': (
+                'tokens_awarded', 'tokens_awarded_display',
+                'transaction_hash', 'polyscan_link'
+            )
+        }),
+        ('Estado', {
+            'fields': ('is_claimed', 'is_claimed_display')
+        }),
+        ('Timestamps', {
+            'fields': ('distribution_date',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def user_link(self, obj):
+        if obj.user:
+            url = reverse('admin:users_user_change', args=[obj.user.id])
+            return format_html('<a href="{}">{}</a>', url, obj.user.username)
+        return "—"
+    user_link.short_description = 'Usuario'
+    
+    def action_type_display(self, obj):
+        action_types = {
+            'ANIMAL_REGISTRATION': 'Registro de Animal',
+            'HEALTH_UPDATE': 'Actualización de Salud',
+            'LOCATION_UPDATE': 'Actualización de Ubicación',
+            'BATCH_CREATION': 'Creación de Lote',
+            'CERTIFICATION': 'Certificación',
+            'DATA_QUALITY': 'Calidad de Datos',
+            'COMMUNITY_CONTRIBUTION': 'Contribución Comunitaria',
+            'IOT_DATA_SUBMISSION': 'Envío de Datos IoT'
+        }
+        display_name = action_types.get(obj.action_type, obj.action_type)
+        
+        action_colors = {
+            'ANIMAL_REGISTRATION': 'green',
+            'HEALTH_UPDATE': 'red',
+            'LOCATION_UPDATE': 'blue',
+            'BATCH_CREATION': 'purple',
+            'CERTIFICATION': 'orange',
+            'DATA_QUALITY': 'teal',
+            'COMMUNITY_CONTRIBUTION': 'pink',
+            'IOT_DATA_SUBMISSION': 'brown'
+        }
+        color = action_colors.get(obj.action_type, 'gray')
+        
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, display_name
+        )
+    action_type_display.short_description = 'Tipo de Acción'
+    
+    def action_id_display(self, obj):
+        if obj.action_id:
+            # Crear enlace según el tipo de acción
+            if obj.action_type == 'ANIMAL_REGISTRATION':
+                url = reverse('admin:cattle_animal_change', args=[obj.action_id])
+                return format_html('<a href="{}">Animal #{}</a>', url, obj.action_id)
+            elif obj.action_type == 'BATCH_CREATION':
+                url = reverse('admin:cattle_batch_change', args=[obj.action_id])
+                return format_html('<a href="{}">Lote #{}</a>', url, obj.action_id)
+            elif obj.action_type == 'HEALTH_UPDATE':
+                url = reverse('admin:cattle_animalhealthrecord_change', args=[obj.action_id])
+                return format_html('<a href="{}">Registro Salud #{}</a>', url, obj.action_id)
+            elif obj.action_type == 'CERTIFICATION':
+                url = reverse('admin:cattle_animalcertification_change', args=[obj.action_id])
+                return format_html('<a href="{}">Certificación #{}</a>', url, obj.action_id)
+            return str(obj.action_id)
+        return "—"
+    action_id_display.short_description = 'ID de Acción'
+    
+    def tokens_awarded_display(self, obj):
+        return f"{obj.tokens_awarded} GAN"
+    tokens_awarded_display.short_description = 'Tokens'
+    
+    def is_claimed_display(self, obj):
+        if obj.is_claimed:
+            return format_html('<span style="color: green;">✅ Reclamado</span>')
+        return format_html('<span style="color: orange;">⏳ Pendiente</span>')
+    is_claimed_display.short_description = 'Estado'
+    
+    def polyscan_link(self, obj):
+        if obj.transaction_hash:
+            return format_html(
+                '<a href="https://polygonscan.com/tx/{}" target="_blank" style="background-color: #6f42c1; color: white; padding: 2px 6px; border-radius: 4px; text-decoration: none;">🔗 PolyScan</a>',
+                obj.transaction_hash
+            )
+        return "—"
+    polyscan_link.short_description = 'Blockchain'
+
+@admin.register(StakingPool)
+class StakingPoolAdmin(admin.ModelAdmin):
+    list_display = [
+        'user_link', 'tokens_staked_display', 'staking_status',
+        'apy_display', 'rewards_earned_display', 'staking_start',
+        'staking_end_display'
+    ]
+    
+    list_filter = [
+        'staking_start', 'staking_duration', 'apy'
+    ]
+    
+    search_fields = [
+        'user__username', 'user__email', 'blockchain_staking_id'
+    ]
+    
+    readonly_fields = [
+        'staking_start', 'user_link', 'staking_status',
+        'staking_end_display', 'rewards_earned_display',
+        'estimated_total_rewards', 'polyscan_link'
+    ]
+    
+    fieldsets = (
+        ('Información del Staking', {
+            'fields': (
+                'user_link', 'tokens_staked', 'staking_duration',
+                'apy', 'apy_display'
+            )
+        }),
+        ('Estado del Staking', {
+            'fields': (
+                'staking_status', 'staking_start', 'staking_end_display',
+                'rewards_earned', 'rewards_earned_display',
+                'estimated_total_rewards'
+            )
+        }),
+        ('Blockchain', {
+            'fields': ('blockchain_staking_id', 'polyscan_link'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def user_link(self, obj):
+        if obj.user:
+            url = reverse('admin:users_user_change', args=[obj.user.id])
+            return format_html('<a href="{}">{}</a>', url, obj.user.username)
+        return "—"
+    user_link.short_description = 'Usuario'
+    
+    def tokens_staked_display(self, obj):
+        return f"{obj.tokens_staked} GAN"
+    tokens_staked_display.short_description = 'Tokens Staked'
+    
+    def staking_status(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        end_date = obj.staking_start + timedelta(days=obj.staking_duration)
+        if timezone.now() < obj.staking_start:
+            return format_html('<span style="color: orange;">⏳ Pendiente</span>')
+        elif timezone.now() <= end_date:
+            days_left = (end_date - timezone.now()).days
+            return format_html('<span style="color: green;">✅ Activo ({} días)</span>', days_left)
+        else:
+            return format_html('<span style="color: blue;">✅ Completado</span>')
+    staking_status.short_description = 'Estado'
+    
+    def apy_display(self, obj):
+        return f"{obj.apy}%"
+    apy_display.short_description = 'APY'
+    
+    def rewards_earned_display(self, obj):
+        return f"{obj.rewards_earned} GAN"
+    rewards_earned_display.short_description = 'Recompensas'
+    
+    def staking_end_display(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        end_date = obj.staking_start + timedelta(days=obj.staking_duration)
+        return end_date.strftime("%Y-%m-%d %H:%M")
+    staking_end_display.short_description = 'Fecha de Fin'
+    
+    def estimated_total_rewards(self, obj):
+        if obj.tokens_staked and obj.apy:
+            # Cálculo de recompensas totales estimadas
+            annual_rewards = obj.tokens_staked * obj.apy / 100
+            duration_years = obj.staking_duration / 365
+            estimated = annual_rewards * duration_years
+            return f"{estimated:.2f} GAN"
+        return "—"
+    estimated_total_rewards.short_description = 'Recompensas Totales Estimadas'
+    
+    def polyscan_link(self, obj):
+        if obj.blockchain_staking_id:
+            return format_html(
+                '<a href="https://polygonscan.com/address/{}" target="_blank" style="background-color: #6f42c1; color: white; padding: 2px 6px; border-radius: 4px; text-decoration: none;">🔗 Ver Staking</a>',
+                obj.blockchain_staking_id
+            )
+        return "—"
+    polyscan_link.short_description = 'Blockchain'
+
 # Configuración adicional para el admin de Users
 admin.site.site_header = "🐄 GanadoChain - User Administration"
+admin.site.site_title = "GanadoChain User Admin"
+admin.site.index_title = "Administración de Usuarios"
+
+# Personalizar el orden de las apps
+def get_app_list(self, request):
+    app_dict = self._build_app_dict(request)
+    
+    # Reordenar las apps
+    app_ordering = {
+        'cattle': 1,      # Primero: Módulo de Animales
+        'users': 2,       # Segundo: Usuarios
+        'blockchain': 3,  # Tercero: Blockchain
+        'iot': 4,         # Cuarto: IoT
+        'auth': 5,        # Autenticación
+        'authtoken': 6,   # Tokens
+    }
+    
+    app_list = sorted(
+        app_dict.values(), 
+        key=lambda x: app_ordering.get(x['app_label'], 10)
+    )
+    
+    return app_list
+
+# Aplicar la personalización
+admin.AdminSite.get_app_list = get_app_list

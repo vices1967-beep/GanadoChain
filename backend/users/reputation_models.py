@@ -105,3 +105,29 @@ class ReputationScore(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.reputation_type} - {self.score}"
+    
+# Añadir al final de backend/users/reputation_models.py
+
+class RewardDistribution(models.Model):
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='rewards')
+    action_type = models.CharField(max_length=100)
+    action_id = models.IntegerField()
+    tokens_awarded = models.DecimalField(max_digits=20, decimal_places=2)
+    distribution_date = models.DateTimeField(auto_now_add=True)
+    transaction_hash = models.CharField(max_length=255)
+    is_claimed = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'users_reward_distribution'
+
+class StakingPool(models.Model):
+    user = models.OneToOneField('User', on_delete=models.CASCADE, related_name='staking_pool')
+    tokens_staked = models.DecimalField(max_digits=20, decimal_places=2)
+    staking_start = models.DateTimeField()
+    staking_duration = models.IntegerField()
+    apy = models.DecimalField(max_digits=5, decimal_places=2)
+    rewards_earned = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    blockchain_staking_id = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'users_staking_pool'

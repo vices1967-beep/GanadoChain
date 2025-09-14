@@ -3,9 +3,10 @@ from django.utils.html import format_html
 from django.urls import reverse
 from .models import (
     BlockchainEvent, ContractInteraction, 
-    NetworkState, SmartContract, GasPriceHistory, TransactionPool
+    NetworkState, SmartContract, GasPriceHistory, TransactionPool,
+    GovernanceProposal, Vote
 )
-from cattle.blockchain_models import BlockchainEventState
+from .market_models import MarketListing, Trade
 from core.admin import format_json_field, status_badge, warning_badge, get_admin_change_link
 import json
 
@@ -33,7 +34,7 @@ class BlockchainEventAdmin(admin.ModelAdmin):
         ('Información de Transacción', {
             'fields': (
                 'event_type', 'transaction_hash', 'short_hash', 'block_number',
-                'polyscan_link', 'event_state_link'
+                'polyscan_link'
             )
         }),
         ('Entidades Involucradas', {
@@ -72,34 +73,17 @@ class BlockchainEventAdmin(admin.ModelAdmin):
     event_type_display.admin_order_field = 'event_type'
 
     def event_state_display(self, obj):
-        try:
-            state = obj.blockchaineventstate
-            state_colors = {
-                'PENDING': 'orange',
-                'CONFIRMED': 'green',
-                'FAILED': 'red',
-                'REVERTED': 'purple'
-            }
-            color = state_colors.get(state.state, 'gray')
-            return format_html(
-                '<span style="color: {}; font-weight: bold;">● {}</span>',
-                color, state.get_state_display()
-            )
-        except BlockchainEventState.DoesNotExist:
-            return format_html('<span style="color: gray;">● SIN ESTADO</span>')
+        return format_html('<span style="color: gray;">● SIN ESTADO</span>')
     event_state_display.short_description = 'Estado'
 
     def event_state_link(self, obj):
-        try:
-            state = obj.blockchaineventstate
-            url = reverse('admin:blockchain_blockchaineventstate_change', args=[state.id])
-            return format_html('<a href="{}">🔗 Ver Estado del Evento</a>', url)
-        except BlockchainEventState.DoesNotExist:
-            return "—"
+        return "—"
     event_state_link.short_description = 'Estado Extendido'
 
     def short_hash(self, obj):
-        return obj.short_hash
+        if obj.transaction_hash:
+            return f"{obj.transaction_hash[:8]}...{obj.transaction_hash[-6:]}"
+        return "—"
     short_hash.short_description = 'Hash'
 
     def animal_link(self, obj):
@@ -129,7 +113,7 @@ class BlockchainEventAdmin(admin.ModelAdmin):
     to_address_short.short_description = 'To'
 
     def polyscan_link(self, obj):
-        if obj.polyscan_url:
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
             return format_html(
                 '<a href="{}" target="_blank" style="background-color: #007bff; color: white; padding: 2px 6px; border-radius: 4px; text-decoration: none;">🔗 PolyScan</a>',
                 obj.polyscan_url
@@ -225,7 +209,9 @@ class ContractInteractionAdmin(admin.ModelAdmin):
     caller_short.short_description = 'Caller'
 
     def short_hash(self, obj):
-        return obj.short_hash
+        if obj.transaction_hash:
+            return f"{obj.transaction_hash[:8]}...{obj.transaction_hash[-6:]}"
+        return "—"
     short_hash.short_description = 'Tx Hash'
 
     def gas_used_display(self, obj):
@@ -235,8 +221,9 @@ class ContractInteractionAdmin(admin.ModelAdmin):
     gas_used_display.short_description = 'Gas Usado'
 
     def gas_cost_display(self, obj):
-        if obj.gas_cost_eth:
-            return f"{obj.gas_cost_eth:.6f} ETH"
+        if obj.gas_used and obj.gas_price:
+            cost = (obj.gas_used * obj.gas_price) / 10**18
+            return f"{cost:.6f} ETH"
         return "—"
     gas_cost_display.short_description = 'Costo'
 
@@ -256,7 +243,7 @@ class ContractInteractionAdmin(admin.ModelAdmin):
     gas_cost_usd.short_description = 'Costo (USD)'
 
     def polyscan_link(self, obj):
-        if obj.polyscan_url:
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
             return format_html(
                 '<a href="{}" target="_blank" style="background-color: #6f42c1; color: white; padding: 2px 6px; border-radius: 4px; text-decoration: none;">🔗 PolyScan</a>',
                 obj.polyscan_url
@@ -382,7 +369,9 @@ class SmartContractAdmin(admin.ModelAdmin):
     contract_type_display.short_description = 'Tipo'
 
     def short_address(self, obj):
-        return obj.short_address
+        if obj.address:
+            return f"{obj.address[:8]}...{obj.address[-6:]}"
+        return "—"
     short_address.short_description = 'Address'
 
     def is_active_display(self, obj):
@@ -398,7 +387,7 @@ class SmartContractAdmin(admin.ModelAdmin):
     is_upgradeable_display.short_description = 'Upgradeable'
 
     def polyscan_link(self, obj):
-        if obj.polyscan_url:
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
             return format_html(
                 '<a href="{}" target="_blank" style="background-color: #6f42c1; color: white; padding: 2px 6px; border-radius: 4px; text-decoration: none;">🔗 Ver Contrato</a>',
                 obj.polyscan_url
@@ -407,7 +396,7 @@ class SmartContractAdmin(admin.ModelAdmin):
     polyscan_link.short_description = 'Contrato'
 
     def deployment_polyscan_link(self, obj):
-        if obj.deployment_polyscan_url:
+        if hasattr(obj, 'deployment_polyscan_url') and obj.deployment_polyscan_url:
             return format_html(
                 '<a href="{}" target="_blank" style="background-color: #007bff; color: white; padding: 2px 6px; border-radius: 4px; text-decoration: none;">🔗 Ver Deployment</a>',
                 obj.deployment_polyscan_url
@@ -442,7 +431,9 @@ class GasPriceHistoryAdmin(admin.ModelAdmin):
     )
 
     def gas_price_gwei(self, obj):
-        return f"{obj.gas_price_gwei:.2f} Gwei"
+        if obj.gas_price:
+            return f"{obj.gas_price / 10**9:.2f} Gwei"
+        return "N/A"
     gas_price_gwei.short_description = 'Precio Gas'
 
 @admin.register(TransactionPool)
@@ -494,11 +485,13 @@ class TransactionPoolAdmin(admin.ModelAdmin):
     status_display.short_description = 'Estado'
 
     def short_hash(self, obj):
-        return obj.short_hash
+        if obj.transaction_hash:
+            return f"{obj.transaction_hash[:8]}...{obj.transaction_hash[-6:]}"
+        return "—"
     short_hash.short_description = 'Tx Hash'
 
     def polyscan_link(self, obj):
-        if obj.polyscan_url:
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
             return format_html(
                 '<a href="{}" target="_blank" style="background-color: #6f42c1; color: white; padding: 2px 6px; border-radius: 4px; text-decoration: none;">🔗 PolyScan</a>',
                 obj.polyscan_url
@@ -515,66 +508,342 @@ class TransactionPoolAdmin(admin.ModelAdmin):
                               obj.raw_transaction)
     raw_transaction_prettified.short_description = 'Transacción Cruda (Formateada)'
 
-# @admin.register(BlockchainEventState)
-# class BlockchainEventStateAdmin(admin.ModelAdmin):
-#     list_display = [
-#         'event_link', 'state_display', 'confirmation_blocks',
-#         'block_confirmed', 'is_confirmed_display', 'created_at'
-#     ]
-    
-#     list_filter = [
-#         'state', 'created_at'
-#     ]
-    
-#     search_fields = [
-#         'event__transaction_hash', 'event__animal__ear_tag', 
-#         'event__batch__name'
-#     ]
-    
-#     readonly_fields = [
-#         'event_link', 'state', 'confirmation_blocks',
-#         'block_confirmed', 'created_at', 'updated_at',
-#         'is_confirmed_display'
-#     ]
-    
-#     fieldsets = (
-#         ('Información del Estado', {
-#             'fields': (
-#                 'event_link', 'state', 'confirmation_blocks',
-#                 'block_confirmed', 'is_confirmed_display'
-#             )
-#         }),
-#         ('Timestamps', {
-#             'fields': (
-#                 'created_at', 'updated_at'
-#             ),
-#             'classes': ('collapse',)
-#         }),
-#     )
-    
-#     def event_link(self, obj):
-#         return get_admin_change_link(obj.event, 'blockchain', 'blockchainevent')
-#     event_link.short_description = 'Evento Blockchain'
-    
-#     def state_display(self, obj):
-#         state_colors = {
-#             'PENDING': 'orange',
-#             'CONFIRMED': 'green',
-#             'FAILED': 'red',
-#             'REVERTED': 'purple'
-#         }
-#         color = state_colors.get(obj.state, 'gray')
-#         return format_html(
-#             '<span style="color: {}; font-weight: bold;">{}</span>',
-#             color, obj.get_state_display()
-#         )
-#     state_display.short_description = 'Estado'
-    
-#     def is_confirmed_display(self, obj):
-#         if obj.is_confirmed:
-#             return status_badge('Confirmado', True)
-#         return warning_badge('Pendiente')
-#     is_confirmed_display.short_description = 'Confirmado'
+# Admin para modelos de Gobernanza
+@admin.register(GovernanceProposal)
+class GovernanceProposalAdmin(admin.ModelAdmin):
+    list_display = [
+        'title_short', 'proposal_type_display', 'proposed_by_link',
+        'voting_status', 'status_display', 'total_votes_calculated',
+        'created_at'
+    ]
+    list_filter = [
+        'proposal_type', 'status', 'created_at', 'voting_start', 'voting_end'
+    ]
+    search_fields = [
+        'title', 'description', 'proposed_by__email', 
+        'proposed_by__first_name', 'proposed_by__last_name'
+    ]
+    readonly_fields = [
+        'created_at', 'parameters_prettified', 'proposed_by_link',
+        'voting_status', 'total_votes_calculated', 'yes_votes_calculated', 
+        'no_votes_calculated', 'blockchain_proposal_link'
+    ]
+    fieldsets = (
+        ('Información de la Propuesta', {
+            'fields': (
+                'title', 'description', 'proposal_type', 'proposed_by_link'
+            )
+        }),
+        ('Votación', {
+            'fields': (
+                'voting_start', 'voting_end', 'status', 'voting_status',
+                'total_votes_calculated', 'yes_votes_calculated', 'no_votes_calculated'
+            )
+        }),
+        ('Parámetros', {
+            'fields': ('parameters_prettified',),
+            'classes': ('collapse',)
+        }),
+        ('Blockchain', {
+            'fields': ('blockchain_proposal_id', 'blockchain_proposal_link'),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',)
+        })
+    )
+
+    def title_short(self, obj):
+        if obj.title:
+            return obj.title[:50] + '...' if len(obj.title) > 50 else obj.title
+        return "—"
+    title_short.short_description = 'Título'
+
+    def proposal_type_display(self, obj):
+        type_colors = {
+            'PARAMETER_CHANGE': 'blue',
+            'UPGRADE': 'green',
+            'GRANT': 'purple',
+            'POLICY': 'orange'
+        }
+        color = type_colors.get(obj.proposal_type, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, obj.get_proposal_type_display()
+        )
+    proposal_type_display.short_description = 'Tipo'
+
+    def proposed_by_link(self, obj):
+        if obj.proposed_by:
+            return get_admin_change_link(obj.proposed_by, 'users', 'user')
+        return "—"
+    proposed_by_link.short_description = 'Propuesto por'
+
+    def status_display(self, obj):
+        status_colors = {
+            'PENDING': 'orange',
+            'ACTIVE': 'blue',
+            'APPROVED': 'green',
+            'REJECTED': 'red',
+            'EXECUTED': 'purple'
+        }
+        color = status_colors.get(obj.status, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">● {}</span>',
+            color, obj.status
+        )
+    status_display.short_description = 'Estado'
+
+    def voting_status(self, obj):
+        from django.utils import timezone
+        now = timezone.now()
+        if now < obj.voting_start:
+            return format_html('<span style="color: orange;">⏰ Pendiente</span>')
+        elif obj.voting_start <= now <= obj.voting_end:
+            return format_html('<span style="color: green;">✅ Activa</span>')
+        else:
+            return format_html('<span style="color: blue;">✅ Completada</span>')
+    voting_status.short_description = 'Estado Votación'
+
+    def total_votes_calculated(self, obj):
+        return obj.votes.count()
+    total_votes_calculated.short_description = 'Total Votos'
+
+    def yes_votes_calculated(self, obj):
+        return obj.votes.filter(vote_value=True).count()
+    yes_votes_calculated.short_description = 'Votos Sí'
+
+    def no_votes_calculated(self, obj):
+        return obj.votes.filter(vote_value=False).count()
+    no_votes_calculated.short_description = 'Votos No'
+
+    def parameters_prettified(self, obj):
+        return format_json_field(obj.parameters) if obj.parameters else "—"
+    parameters_prettified.short_description = 'Parámetros'
+
+    def blockchain_proposal_link(self, obj):
+        if obj.blockchain_proposal_id:
+            return format_html(
+                '<a href="https://polygonscan.com/tx/{}" target="_blank">🔗 Ver en Blockchain</a>',
+                obj.blockchain_proposal_id
+            )
+        return "—"
+    blockchain_proposal_link.short_description = 'Enlace Blockchain'
+
+@admin.register(Vote)
+class VoteAdmin(admin.ModelAdmin):
+    list_display = [
+        'proposal_link', 'voter_link', 'vote_value_display',
+        'voting_power', 'created_at', 'blockchain_link'
+    ]
+    list_filter = ['vote_value', 'created_at']
+    search_fields = [
+        'proposal__title', 'voter__email', 
+        'voter__first_name', 'voter__last_name'
+    ]
+    readonly_fields = [
+        'created_at', 'proposal_link', 'voter_link',
+        'vote_value_display', 'blockchain_link'
+    ]
+    fieldsets = (
+        ('Información del Voto', {
+            'fields': (
+                'proposal_link', 'voter_link', 'vote_value', 'voting_power'
+            )
+        }),
+        ('Blockchain', {
+            'fields': ('blockchain_vote_hash', 'blockchain_link')
+        }),
+        ('Temporal', {
+            'fields': ('created_at',)
+        })
+    )
+
+    def proposal_link(self, obj):
+        if obj.proposal:
+            return get_admin_change_link(obj.proposal, 'blockchain', 'governanceproposal')
+        return "—"
+    proposal_link.short_description = 'Propuesta'
+
+    def voter_link(self, obj):
+        if obj.voter:
+            return get_admin_change_link(obj.voter, 'users', 'user')
+        return "—"
+    voter_link.short_description = 'Votante'
+
+    def vote_value_display(self, obj):
+        if obj.vote_value:
+            return format_html('<span style="color: green;">✅ Sí</span>')
+        else:
+            return format_html('<span style="color: red;">❌ No</span>')
+    vote_value_display.short_description = 'Voto'
+
+    def blockchain_link(self, obj):
+        if obj.blockchain_vote_hash:
+            return format_html(
+                '<a href="https://polygonscan.com/tx/{}" target="_blank">🔗 Ver en Blockchain</a>',
+                obj.blockchain_vote_hash
+            )
+        return "—"
+    blockchain_link.short_description = 'Enlace Blockchain'
+
+# Admin para modelos de Mercado
+@admin.register(MarketListing)
+class MarketListingAdmin(admin.ModelAdmin):
+    list_display = [
+        'animal_link', 'seller_link', 'price_display',
+        'currency', 'listing_status', 'expiration_status',
+        'listing_date'
+    ]
+    list_filter = ['currency', 'is_active', 'listing_date', 'expiration_date']
+    search_fields = [
+        'animal__ear_tag', 'seller__email', 
+        'seller__first_name', 'seller__last_name'
+    ]
+    readonly_fields = [
+        'listing_date', 'animal_link', 'seller_link',
+        'blockchain_link', 'listing_status', 'expiration_status'
+    ]
+    fieldsets = (
+        ('Información del Listado', {
+            'fields': (
+                'animal_link', 'seller_link', 'price', 'currency'
+            )
+        }),
+        ('Fechas', {
+            'fields': ('listing_date', 'expiration_date')
+        }),
+        ('Estado', {
+            'fields': ('is_active', 'listing_status', 'expiration_status')
+        }),
+        ('Blockchain', {
+            'fields': ('blockchain_listing_id', 'blockchain_link'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def animal_link(self, obj):
+        if obj.animal:
+            return get_admin_change_link(obj.animal, 'cattle', 'animal')
+        return "—"
+    animal_link.short_description = 'Animal'
+
+    def seller_link(self, obj):
+        if obj.seller:
+            return get_admin_change_link(obj.seller, 'users', 'user')
+        return "—"
+    seller_link.short_description = 'Vendedor'
+
+    def price_display(self, obj):
+        if obj.price and obj.currency:
+            return f"{obj.price} {obj.currency}"
+        return "—"
+    price_display.short_description = 'Precio'
+
+    def listing_status(self, obj):
+        if obj.is_active:
+            return status_badge('Activo', True)
+        return status_badge('Inactivo', False)
+    listing_status.short_description = 'Estado'
+
+    def expiration_status(self, obj):
+        from django.utils import timezone
+        if obj.expiration_date and obj.expiration_date < timezone.now():
+            return format_html('<span style="color: red;">❌ Expirado</span>')
+        elif obj.expiration_date:
+            days_left = (obj.expiration_date - timezone.now()).days
+            return format_html('<span style="color: green;">✅ {} días</span>', days_left)
+        return "—"
+    expiration_status.short_description = 'Expiración'
+
+    def blockchain_link(self, obj):
+        if obj.blockchain_listing_id:
+            return format_html(
+                '<a href="https://polygonscan.com/address/{}" target="_blank">🔗 Ver en Blockchain</a>',
+                obj.blockchain_listing_id
+            )
+        return "—"
+    blockchain_link.short_description = 'Enlace Blockchain'
+
+@admin.register(Trade)
+class TradeAdmin(admin.ModelAdmin):
+    list_display = [
+        'listing_link', 'buyer_link', 'price_display',
+        'platform_fee_display', 'status_display', 'trade_date'
+    ]
+    list_filter = ['status', 'trade_date']
+    search_fields = [
+        'listing__animal__ear_tag', 'buyer__email', 
+        'buyer__first_name', 'buyer__last_name',
+        'transaction_hash'
+    ]
+    readonly_fields = [
+        'trade_date', 'listing_link', 'buyer_link',
+        'blockchain_link', 'status_display'
+    ]
+    fieldsets = (
+        ('Información de la Transacción', {
+            'fields': (
+                'listing_link', 'buyer_link', 'price', 'currency', 'platform_fee'
+            )
+        }),
+        ('Estado', {
+            'fields': ('status', 'status_display')
+        }),
+        ('Blockchain', {
+            'fields': ('transaction_hash', 'blockchain_link')
+        }),
+        ('Temporal', {
+            'fields': ('trade_date',)
+        })
+    )
+
+    def listing_link(self, obj):
+        if obj.listing:
+            return get_admin_change_link(obj.listing, 'blockchain', 'marketlisting')
+        return "—"
+    listing_link.short_description = 'Listado'
+
+    def buyer_link(self, obj):
+        if obj.buyer:
+            return get_admin_change_link(obj.buyer, 'users', 'user')
+        return "—"
+    buyer_link.short_description = 'Comprador'
+
+    def price_display(self, obj):
+        if obj.price and obj.currency:
+            return f"{obj.price} {obj.currency}"
+        return "—"
+    price_display.short_description = 'Precio'
+
+    def platform_fee_display(self, obj):
+        if obj.platform_fee and obj.currency:
+            return f"{obj.platform_fee} {obj.currency}"
+        return "—"
+    platform_fee_display.short_description = 'Comisión'
+
+    def status_display(self, obj):
+        status_colors = {
+            'PENDING': 'orange',
+            'COMPLETED': 'green',
+            'FAILED': 'red',
+            'CANCELLED': 'gray'
+        }
+        color = status_colors.get(obj.status, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, obj.status
+        )
+    status_display.short_description = 'Estado'
+
+    def blockchain_link(self, obj):
+        if obj.transaction_hash:
+            return format_html(
+                '<a href="https://polygonscan.com/tx/{}" target="_blank">🔗 Ver en Blockchain</a>',
+                obj.transaction_hash
+            )
+        return "—"
+    blockchain_link.short_description = 'Enlace Blockchain'
 
 # Configuración del Admin Site
 admin.site.site_header = "🐄 GanadoChain - Blockchain Administration"

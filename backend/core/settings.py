@@ -90,7 +90,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-    'drf_yasg',
+    'drf_spectacular',
     'django_filters',
     
     # Custom apps
@@ -99,6 +99,12 @@ INSTALLED_APPS = [
     'iot',
     'blockchain',
     'core',  # ✅ Asegurar que core está aquí
+    'market',
+    'governance',
+    'consumer',
+    'rewards',
+    'analytics',
+    'reports',
 ]
 
 MIDDLEWARE = [
@@ -140,6 +146,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
@@ -373,29 +380,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # ==============================================================================
 # CONFIGURACIÓN PARA DRF-YASG (SWAGGER)
 # ==============================================================================
-
-SWAGGER_SETTINGS = {
-    'SECURITY_DEFINITIONS': {
-        'Bearer': {
-            'type': 'apiKey',
-            'name': 'Authorization',
-            'in': 'header'
-        }
-    },
-    'USE_SESSION_AUTH': False,
-    'JSON_EDITOR': True,
-    'DOC_EXPANSION': 'none',
-    'DEFAULT_MODEL_RENDERING': 'example',
-    'DEEP_LINKING': True,
-    # ESTA LÍNEA ES LA QUE FALTA Y CAUSA EL ERROR:
-    'DEFAULT_INFO': 'core.urls.schema_view.info',  # ← AGREGAR ESTA LÍNEA
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'GanadoChain API',
+    'DESCRIPTION': 'Blockchain Cattle Tracking System',
+    'VERSION': '1.0.0',
 }
-
-# NOTA: SPECTACULAR_SETTINGS es para drf-spectacular, no para drf-yasg
-# Si quieres usar drf-spectacular, necesitas instalarlo y cambiar la configuración
-# pip install drf-spectacular
-
-# ==============================================================================
+# # ==============================================================================
 # VALIDACIONES FINALES
 # ==============================================================================
 

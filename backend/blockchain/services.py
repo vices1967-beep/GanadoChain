@@ -675,3 +675,27 @@ class BlockchainService:
                 'success': False,
                 'error': f'Error updating batch status: {str(e)}'
             }
+        
+# Añadir al final de backend/blockchain/services.py
+
+class MarketService:
+    def create_listing(self, animal_id, seller_id, price, currency='USDC', expiration_days=30):
+        """Crear una nueva listing en el mercado"""
+        # Implementación aquí
+        pass
+    
+    def execute_trade(self, listing_id, buyer_id):
+        """Ejecutar un trade"""
+        # Implementación aquí
+        pass
+
+class GovernanceService:
+    def create_proposal(self, title, description, proposal_type, proposed_by_id, parameters=None):
+        """Crear una nueva propuesta de gobernanza"""
+        # Implementación aquí
+        pass
+    
+    def cast_vote(self, proposal_id, voter_id, vote_value, voting_power):
+        """Emitir un voto"""
+        # Implementación aquí
+        pass

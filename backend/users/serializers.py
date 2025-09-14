@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from .models import UserActivityLog, UserPreference, APIToken
+from .reputation_models import RewardDistribution, StakingPool
 from .reputation_models import UserRole, ReputationScore
 from .notification_models import Notification
 from .notification_models import Notification  # Importación correcta
@@ -415,3 +416,201 @@ class NotificationBulkCreateSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=200)
     message = serializers.CharField()
     priority = serializers.ChoiceField(choices=Notification._meta.get_field('priority').choices, default='MEDIUM')
+
+# Añadir al archivo de serializers existente de users
+
+class RewardDistributionSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_wallet = serializers.CharField(source='user.wallet_address', read_only=True)
+    action_type_display = serializers.CharField(read_only=True)
+    is_claimed_display = serializers.CharField(read_only=True)
+    polyscan_url = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = RewardDistribution
+        fields = [
+            'id', 'user', 'user_name', 'user_email', 'user_wallet', 'action_type',
+            'action_type_display', 'action_id', 'tokens_awarded', 'distribution_date',
+            'transaction_hash', 'is_claimed', 'is_claimed_display', 'polyscan_url'
+        ]
+        read_only_fields = [
+            'distribution_date', 'is_claimed_display', 'polyscan_url',
+            'user_name', 'user_email', 'user_wallet'
+        ]
+    
+    def get_polyscan_url(self, obj):
+        if obj.transaction_hash:
+            return f"https://polygonscan.com/tx/{obj.transaction_hash}"
+        return None
+    
+    def get_action_type_display(self, obj):
+        # Mapear tipos de acción a nombres más descriptivos
+        action_types = {
+            'ANIMAL_REGISTRATION': 'Registro de Animal',
+            'HEALTH_UPDATE': 'Actualización de Salud',
+            'LOCATION_UPDATE': 'Actualización de Ubicación',
+            'BATCH_CREATION': 'Creación de Lote',
+            'CERTIFICATION': 'Certificación',
+            'DATA_QUALITY': 'Calidad de Datos',
+            'COMMUNITY_CONTRIBUTION': 'Contribución Comunitaria',
+            'IOT_DATA_SUBMISSION': 'Envío de Datos IoT'
+        }
+        return action_types.get(obj.action_type, obj.action_type)
+    
+    def get_is_claimed_display(self, obj):
+        if obj.is_claimed:
+            return format_html('<span style="color: green;">✅ Reclamado</span>')
+        return format_html('<span style="color: orange;">⏳ Pendiente</span>')
+
+class StakingPoolSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_wallet = serializers.CharField(source='user.wallet_address', read_only=True)
+    staking_status = serializers.SerializerMethodField(read_only=True)
+    days_remaining = serializers.SerializerMethodField(read_only=True)
+    estimated_rewards = serializers.SerializerMethodField(read_only=True)
+    polyscan_url = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = StakingPool
+        fields = [
+            'id', 'user', 'user_name', 'user_email', 'user_wallet', 'tokens_staked',
+            'staking_start', 'staking_duration', 'apy', 'rewards_earned',
+            'blockchain_staking_id', 'staking_status', 'days_remaining',
+            'estimated_rewards', 'polyscan_url'
+        ]
+        read_only_fields = [
+            'staking_status', 'days_remaining', 'estimated_rewards', 'polyscan_url',
+            'user_name', 'user_email', 'user_wallet'
+        ]
+    
+    def get_staking_status(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        end_date = obj.staking_start + timedelta(days=obj.staking_duration)
+        if timezone.now() < obj.staking_start:
+            return 'PENDING'
+        elif timezone.now() <= end_date:
+            return 'ACTIVE'
+        else:
+            return 'COMPLETED'
+    
+    def get_days_remaining(self, obj):
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        end_date = obj.staking_start + timedelta(days=obj.staking_duration)
+        if timezone.now() > end_date:
+            return 0
+        return (end_date - timezone.now()).days
+    
+    def get_estimated_rewards(self, obj):
+        if obj.tokens_staked and obj.apy:
+            # Cálculo simple de recompensas estimadas
+            daily_apy = obj.apy / 365
+            days_staked = (timezone.now() - obj.staking_start).days
+            estimated = obj.tokens_staked * daily_apy * days_staked / 100
+            return estimated
+        return 0
+    
+    def get_polyscan_url(self, obj):
+        if obj.blockchain_staking_id:
+            return f"https://polygonscan.com/address/{obj.blockchain_staking_id}"
+        return None
+
+class ClaimRewardsSerializer(serializers.Serializer):
+    reward_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        min_length=1,
+        max_length=50
+    )
+    wallet_address = serializers.CharField(max_length=42)
+    
+    def validate_wallet_address(self, value):
+        import re
+        if not re.match(r'^(0x)?[0-9a-fA-F]{40}$', value):
+            raise serializers.ValidationError('Formato de wallet inválido.')
+        return value
+    
+    def validate_reward_ids(self, value):
+        # Verificar que todas las recompensas existen y pertenecen al usuario
+        from .models import RewardDistribution
+        from django.contrib.auth import get_user_model
+        
+        User = get_user_model()
+        user = self.context['request'].user
+        
+        rewards = RewardDistribution.objects.filter(
+            id__in=value, 
+            user=user,
+            is_claimed=False
+        )
+        
+        if len(rewards) != len(value):
+            raise serializers.ValidationError('Algunas recompensas no son válidas o ya fueron reclamadas.')
+        
+        return value
+
+class StakeTokensSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(max_digits=20, decimal_places=2, min_value=0.01)
+    duration_days = serializers.IntegerField(min_value=30, max_value=365)
+    wallet_address = serializers.CharField(max_length=42)
+    
+    def validate_wallet_address(self, value):
+        import re
+        if not re.match(r'^(0x)?[0-9a-fA-F]{40}$', value):
+            raise serializers.ValidationError('Formato de wallet inválido.')
+        return value
+
+class UnstakeTokensSerializer(serializers.Serializer):
+    staking_pool_id = serializers.IntegerField(min_value=1)
+    wallet_address = serializers.CharField(max_length=42)
+    
+    def validate_wallet_address(self, value):
+        import re
+        if not re.match(r'^(0x)?[0-9a-fA-F]{40}$', value):
+            raise serializers.ValidationError('Formato de wallet inválido.')
+        return value
+
+class RewardStatsSerializer(serializers.Serializer):
+    total_tokens_earned = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_tokens_claimed = serializers.DecimalField(max_digits=20, decimal_places=2)
+    pending_rewards = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_rewards_count = serializers.IntegerField()
+    top_action_types = serializers.JSONField()
+
+class StakingStatsSerializer(serializers.Serializer):
+    total_staked = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_rewards_earned = serializers.DecimalField(max_digits=20, decimal_places=2)
+    average_apy = serializers.DecimalField(max_digits=5, decimal_places=2)
+    active_stakings = serializers.IntegerField()
+    completed_stakings = serializers.IntegerField()
+
+class UserRewardSummarySerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    user_name = serializers.CharField()
+    user_email = serializers.EmailField()
+    total_earned = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_claimed = serializers.DecimalField(max_digits=20, decimal_places=2)
+    pending_amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    rewards_count = serializers.IntegerField()
+    last_reward_date = serializers.DateTimeField()
+
+class ActionTypeRewardSerializer(serializers.Serializer):
+    action_type = serializers.CharField()
+    action_display = serializers.CharField()
+    total_tokens = serializers.DecimalField(max_digits=20, decimal_places=2)
+    reward_count = serializers.IntegerField()
+    average_reward = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+class RewardDistributionCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RewardDistribution
+        fields = ['user', 'action_type', 'action_id', 'tokens_awarded', 'transaction_hash']
+
+class StakingPoolCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StakingPool
+        fields = ['user', 'tokens_staked', 'staking_duration', 'apy', 'blockchain_staking_id']

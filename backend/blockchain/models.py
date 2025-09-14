@@ -1,4 +1,6 @@
 from django.db import models
+# En blockchain/models.py
+from .market_models import MarketListing, Trade
 from django.core.exceptions import ValidationError
 from django.utils.html import format_html
 from django.urls import reverse
@@ -453,3 +455,39 @@ class TransactionPool(models.Model):
         if self.transaction_hash:
             return f"https://amoy.polygonscan.com/tx/{self.transaction_hash}"
         return None
+    
+# Añadir al final de backend/blockchain/models.py
+
+class GovernanceProposal(models.Model):
+    PROPOSAL_TYPES = (
+        ('PARAMETER_CHANGE', 'Cambio de Parámetro'),
+        ('UPGRADE', 'Actualización de Contrato'),
+        ('GRANT', 'Concesión de Fondos'),
+        ('POLICY', 'Cambio de Política'),
+    )
+    
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    proposal_type = models.CharField(max_length=50, choices=PROPOSAL_TYPES)
+    proposed_by = models.ForeignKey('users.User', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    voting_start = models.DateTimeField()
+    voting_end = models.DateTimeField()
+    parameters = models.JSONField(null=True, blank=True)
+    status = models.CharField(max_length=20, default='PENDING')
+    blockchain_proposal_id = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'blockchain_governance_proposal'
+
+class Vote(models.Model):
+    proposal = models.ForeignKey(GovernanceProposal, on_delete=models.CASCADE, related_name='votes')
+    voter = models.ForeignKey('users.User', on_delete=models.CASCADE)
+    vote_value = models.BooleanField()
+    voting_power = models.DecimalField(max_digits=20, decimal_places=2)
+    blockchain_vote_hash = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'blockchain_vote'
+        unique_together = ['proposal', 'voter']

@@ -1,5 +1,5 @@
 from rest_framework import serializers 
-from .models import Animal, AnimalHealthRecord, Batch, HealthStatus 
+from .models import Animal, AnimalHealthRecord, Batch, HealthStatus, AnimalGeneticProfile, FeedingRecord
 from .blockchain_models import BlockchainEventState
 from .audit_models import CattleAuditTrail
 from django.contrib.auth import get_user_model
@@ -256,3 +256,301 @@ class BatchSearchSerializer(serializers.Serializer):
     created_by_id = serializers.IntegerField(required=False, min_value=1)
     min_animals = serializers.IntegerField(required=False, min_value=0)
     max_animals = serializers.IntegerField(required=False, min_value=0)
+
+# Añadir al archivo de serializers existente
+
+class AnimalGeneticProfileSerializer(serializers.ModelSerializer):
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True)
+    animal_breed = serializers.CharField(source='animal.breed', read_only=True)
+    parent_male_ear_tag = serializers.CharField(source='parent_male.ear_tag', read_only=True, allow_null=True)
+    parent_female_ear_tag = serializers.CharField(source='parent_female.ear_tag', read_only=True, allow_null=True)
+    blockchain_linked = serializers.SerializerMethodField(read_only=True)
+    polyscan_url = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = AnimalGeneticProfile
+        fields = [
+            'id', 'animal', 'animal_ear_tag', 'animal_breed', 'genetic_marker', 
+            'breed_composition', 'parent_male', 'parent_male_ear_tag', 'parent_female',
+            'parent_female_ear_tag', 'genetic_defects', 'ipfs_hash', 'blockchain_hash',
+            'blockchain_linked', 'polyscan_url', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'blockchain_linked', 'polyscan_url']
+    
+    def get_blockchain_linked(self, obj):
+        return bool(obj.blockchain_hash)
+    
+    def get_polyscan_url(self, obj):
+        if obj.blockchain_hash:
+            return f"https://polygonscan.com/tx/{obj.blockchain_hash}"
+        return None
+    
+    def validate_blockchain_hash(self, value):
+        import re
+        if value and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError('Formato de hash blockchain inválido.')
+        return value
+    
+    def validate_parent_male(self, value):
+        if value and value.gender != 'male':
+            raise serializers.ValidationError('El animal padre debe ser macho.')
+        return value
+    
+    def validate_parent_female(self, value):
+        if value and value.gender != 'female':
+            raise serializers.ValidationError('El animal padre debe ser hembra.')
+        return value
+
+class FeedingRecordSerializer(serializers.ModelSerializer):
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True)
+    animal_breed = serializers.CharField(source='animal.breed', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.get_full_name', read_only=True)
+    supplier_email = serializers.EmailField(source='supplier.email', read_only=True)
+    blockchain_linked = serializers.SerializerMethodField(read_only=True)
+    polyscan_url = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = FeedingRecord
+        fields = [
+            'id', 'animal', 'animal_ear_tag', 'animal_breed', 'feed_type', 
+            'quantity_kg', 'feeding_date', 'location', 'supplier', 'supplier_name',
+            'supplier_email', 'blockchain_hash', 'blockchain_linked', 'polyscan_url',
+            'created_at'
+        ]
+        read_only_fields = ['created_at', 'blockchain_linked', 'polyscan_url']
+    
+    def get_blockchain_linked(self, obj):
+        return bool(obj.blockchain_hash)
+    
+    def get_polyscan_url(self, obj):
+        if obj.blockchain_hash:
+            return f"https://polygonscan.com/tx/{obj.blockchain_hash}"
+        return None
+    
+    def validate_blockchain_hash(self, value):
+        import re
+        if value and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError('Formato de hash blockchain inválido.')
+        return value
+    
+    def validate_supplier(self, value):
+        if value.role != 'supplier':
+            raise serializers.ValidationError('El usuario debe tener el rol de proveedor.')
+        return value
+
+class FeedingRecordCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FeedingRecord
+        fields = ['animal', 'feed_type', 'quantity_kg', 'feeding_date', 'location', 'supplier']
+
+class GeneticProfileCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnimalGeneticProfile
+        fields = ['animal', 'genetic_marker', 'breed_composition', 'parent_male', 'parent_female', 'genetic_defects']
+
+class GeneticDefectReportSerializer(serializers.Serializer):
+    defect_name = serializers.CharField(max_length=100)
+    severity = serializers.ChoiceField(choices=[('low', 'Bajo'), ('medium', 'Medio'), ('high', 'Alto')])
+    description = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+class BreedCompositionSerializer(serializers.Serializer):
+    breed_name = serializers.CharField(max_length=100)
+    percentage = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100)
+
+class FeedingAnalysisSerializer(serializers.Serializer):
+    animal_id = serializers.IntegerField(min_value=1)
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    
+    def validate(self, data):
+        if data['start_date'] > data['end_date']:
+            raise serializers.ValidationError('La fecha de inicio no puede ser posterior a la fecha de fin.')
+        return data
+
+# Añadir al final de cattle/serializers.py
+
+class AnimalGeneticProfileSerializer(serializers.ModelSerializer):
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True)
+    animal_breed = serializers.CharField(source='animal.breed', read_only=True)
+    parent_male_ear_tag = serializers.CharField(source='parent_male.ear_tag', read_only=True, allow_null=True)
+    parent_female_ear_tag = serializers.CharField(source='parent_female.ear_tag', read_only=True, allow_null=True)
+    blockchain_linked = serializers.SerializerMethodField(read_only=True)
+    polyscan_url = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = AnimalGeneticProfile
+        fields = [
+            'id', 'animal', 'animal_ear_tag', 'animal_breed', 'genetic_marker', 
+            'breed_composition', 'parent_male', 'parent_male_ear_tag', 'parent_female',
+            'parent_female_ear_tag', 'genetic_defects', 'ipfs_hash', 'blockchain_hash',
+            'blockchain_linked', 'polyscan_url', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'blockchain_linked', 'polyscan_url']
+    
+    def get_blockchain_linked(self, obj):
+        return bool(obj.blockchain_hash)
+    
+    def get_polyscan_url(self, obj):
+        if obj.blockchain_hash:
+            return f"https://polygonscan.com/tx/{obj.blockchain_hash}"
+        return None
+    
+    def validate_blockchain_hash(self, value):
+        import re
+        if value and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError('Formato de hash blockchain inválido.')
+        return value
+    
+    def validate_parent_male(self, value):
+        if value and value.gender != 'male':
+            raise serializers.ValidationError('El animal padre debe ser macho.')
+        return value
+    
+    def validate_parent_female(self, value):
+        if value and value.gender != 'female':
+            raise serializers.ValidationError('El animal padre debe ser hembra.')
+        return value
+
+class FeedingRecordSerializer(serializers.ModelSerializer):
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True)
+    animal_breed = serializers.CharField(source='animal.breed', read_only=True)
+    supplier_name = serializers.CharField(source='supplier.get_full_name', read_only=True)
+    supplier_email = serializers.EmailField(source='supplier.email', read_only=True)
+    blockchain_linked = serializers.SerializerMethodField(read_only=True)
+    polyscan_url = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = FeedingRecord
+        fields = [
+            'id', 'animal', 'animal_ear_tag', 'animal_breed', 'feed_type', 
+            'quantity_kg', 'feeding_date', 'location', 'supplier', 'supplier_name',
+            'supplier_email', 'blockchain_hash', 'blockchain_linked', 'polyscan_url',
+            'created_at'
+        ]
+        read_only_fields = ['created_at', 'blockchain_linked', 'polyscan_url']
+    
+    def get_blockchain_linked(self, obj):
+        return bool(obj.blockchain_hash)
+    
+    def get_polyscan_url(self, obj):
+        if obj.blockchain_hash:
+            return f"https://polygonscan.com/tx/{obj.blockchain_hash}"
+        return None
+    
+    def validate_blockchain_hash(self, value):
+        import re
+        if value and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError('Formato de hash blockchain inválido.')
+        return value
+    
+    def validate_supplier(self, value):
+        if value.role != 'supplier':
+            raise serializers.ValidationError('El usuario debe tener el rol de proveedor.')
+        return value
+    
+# Agregar al final de cattle/serializers.py
+
+class PublicAnimalHistorySerializer(serializers.ModelSerializer):
+    """Serializer público para el historial de animales (sin información sensible)"""
+    health_status_display = serializers.CharField(source='get_health_status_display', read_only=True)
+    age = serializers.SerializerMethodField(read_only=True)
+    breed = serializers.CharField(read_only=True)
+    
+    class Meta:
+        model = Animal
+        fields = [
+            'id', 'ear_tag', 'breed', 'birth_date', 'health_status', 
+            'health_status_display', 'age', 'created_at'
+        ]
+        read_only_fields = ['created_at']
+    
+    def get_age(self, obj):
+        from datetime import date
+        if obj.birth_date:
+            today = date.today()
+            return today.year - obj.birth_date.year - ((today.month, today.day) < (obj.birth_date.month, obj.birth_date.day))
+        return None
+    
+    def to_representation(self, instance):
+        """Ocultar información sensible para el público"""
+        data = super().to_representation(instance)
+        # Remover campos sensibles si es necesario
+        return data
+    
+# Agregar al final de cattle/serializers.py
+
+class PublicAnimalSerializer(serializers.ModelSerializer):
+    """Serializer público para información básica de animales (sin datos sensibles)"""
+    health_status_display = serializers.CharField(source='get_health_status_display', read_only=True)
+    age = serializers.SerializerMethodField(read_only=True)
+    breed = serializers.CharField(read_only=True)
+    is_verified = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = Animal
+        fields = [
+            'id', 'ear_tag', 'breed', 'birth_date', 'health_status', 
+            'health_status_display', 'age', 'location', 'is_verified',
+            'created_at'
+        ]
+        read_only_fields = ['created_at']
+    
+    def get_age(self, obj):
+        from datetime import date
+        if obj.birth_date:
+            today = date.today()
+            return today.year - obj.birth_date.year - ((today.month, today.day) < (obj.birth_date.month, obj.birth_date.day))
+        return None
+    
+    def get_is_verified(self, obj):
+        """Indica si el animal está verificado en blockchain"""
+        return bool(obj.token_id and obj.mint_transaction_hash)
+    
+    def to_representation(self, instance):
+        """Ocultar información sensible para el público"""
+        data = super().to_representation(instance)
+        # Asegurar que no se muestren datos sensibles
+        if 'owner' in data:
+            del data['owner']
+        if 'owner_email' in data:
+            del data['owner_email']
+        if 'owner_name' in data:
+            del data['owner_name']
+        if 'nft_owner_wallet' in data:
+            del data['nft_owner_wallet']
+        return data
+    
+# Agregar al final de cattle/serializers.py
+
+class PublicHealthRecordSerializer(serializers.ModelSerializer):
+    """Serializer público para registros de salud (sin información sensible)"""
+    health_status_display = serializers.CharField(source='get_health_status_display', read_only=True)
+    source_display = serializers.CharField(source='get_source_display', read_only=True)
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True)
+    animal_breed = serializers.CharField(source='animal.breed', read_only=True)
+    
+    class Meta:
+        model = AnimalHealthRecord
+        fields = [
+            'id', 'animal_ear_tag', 'animal_breed', 'health_status', 
+            'health_status_display', 'source', 'source_display', 
+            'temperature', 'heart_rate', 'movement_activity', 'created_at'
+        ]
+        read_only_fields = ['created_at']
+    
+    def to_representation(self, instance):
+        """Ocultar información sensible para el público"""
+        data = super().to_representation(instance)
+        # Remover campos sensibles
+        if 'veterinarian' in data:
+            del data['veterinarian']
+        if 'veterinarian_name' in data:
+            del data['veterinarian_name']
+        if 'veterinarian_email' in data:
+            del data['veterinarian_email']
+        if 'iot_device_id' in data:
+            del data['iot_device_id']
+        if 'notes' in data and data['notes']:
+            # Mantener solo las primeras palabras de las notas o ocultarlas completamente
+            data['notes'] = 'Información de salud registrada' if data['notes'] else ''
+        return data

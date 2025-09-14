@@ -2,6 +2,8 @@
 import os
 import re
 from django.core.exceptions import ValidationError
+# En core/models.py, asegúrate de tener:
+from .metrics_models import * # ← Esta línea debe estar
 
 def validate_ethereum_address(value):
     """Validación completa de dirección Ethereum"""

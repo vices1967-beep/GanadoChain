@@ -9,26 +9,12 @@ from django.http import JsonResponse
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from drf_yasg.views import get_schema_view
-from drf_yasg import openapi
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from rest_framework import permissions
 from datetime import datetime  # ← Agregar esta línea
 # Importar vistas de core
 from . import views
 
-# Configuración de Swagger/OpenAPI
-schema_view = get_schema_view(
-    openapi.Info(
-        title="GanadoChain API",
-        default_version='v1',
-        description="API Documentation for GanadoChain - Blockchain Cattle Tracking System",
-        terms_of_service="https://ganadochain.com/terms/",
-        contact=openapi.Contact(email="support@ganadochain.com"),
-        license=openapi.License(name="MIT License"),
-    ),
-    public=True,
-    permission_classes=(permissions.AllowAny,),
-)
 
 def home(request):
     return JsonResponse({
@@ -89,9 +75,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     
     # API Documentation
-    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
-    path('swagger.json/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     
     # Core API Routes (NUEVAS)
     path('api/core/', include([
@@ -122,6 +108,18 @@ urlpatterns = [
     path('api/iot/', include('iot.urls')),
     path('api/blockchain/', include('blockchain.urls')),
     path('api/users/', include('users.urls')),
+    path('api/market/', include('market.urls')),
+    path('api/governance/', include('governance.urls')),
+    path('api/consumer/', include('consumer.urls')),
+    path('api/rewards/', include('rewards.urls')),
+    path('api/analytics/', include('analytics.urls')),
+    path('api/reports/', include('reports.urls')),
+    
+    # URLs de vistas avanzadas
+    path('api/blockchain/advanced/', include('blockchain.advanced_urls')),
+    path('api/iot/advanced/', include('iot.advanced_urls')),
+
+
     
     # Health check endpoint legacy (mantener por compatibilidad)
     path('health/', lambda request: JsonResponse({'status': 'healthy'}), name='legacy-health-check'),

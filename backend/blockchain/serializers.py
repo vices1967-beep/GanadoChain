@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from cattle.models import HealthStatus
-from .models import BlockchainEvent, ContractInteraction, NetworkState, SmartContract, GasPriceHistory, TransactionPool
+from .models import BlockchainEvent, ContractInteraction, NetworkState, SmartContract, GasPriceHistory, TransactionPool, GovernanceProposal, Vote
+from .market_models import MarketListing, Trade
+from cattle.blockchain_models import CertificationStandard, AnimalCertification
 import re
 import json
 from decimal import Decimal
@@ -437,3 +439,364 @@ class BlockchainStatsSerializer(serializers.Serializer):
     last_block_number = serializers.IntegerField(min_value=0)
     active_contracts = serializers.IntegerField(min_value=0)
     pending_transactions = serializers.IntegerField(min_value=0)
+
+# Añadir al archivo de serializers existente
+
+# Serializers para Certificaciones y Cumplimiento Normativo
+class CertificationStandardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CertificationStandard
+        fields = [
+            'id', 'name', 'description', 'issuing_authority', 'validity_days',
+            'requirements', 'is_active', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+class AnimalCertificationSerializer(serializers.ModelSerializer):
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True)
+    animal_breed = serializers.CharField(source='animal.breed', read_only=True)
+    standard_name = serializers.CharField(source='standard.name', read_only=True)
+    certifying_authority_name = serializers.CharField(source='certifying_authority.get_full_name', read_only=True)
+    certifying_authority_email = serializers.EmailField(source='certifying_authority.email', read_only=True)
+    blockchain_linked = serializers.SerializerMethodField(read_only=True)
+    polyscan_url = serializers.SerializerMethodField(read_only=True)
+    is_expired = serializers.SerializerMethodField(read_only=True)
+    is_valid = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = AnimalCertification
+        fields = [
+            'id', 'animal', 'animal_ear_tag', 'animal_breed', 'standard', 'standard_name',
+            'certification_date', 'expiration_date', 'certifying_authority',
+            'certifying_authority_name', 'certifying_authority_email', 'evidence',
+            'blockchain_hash', 'revoked', 'revocation_reason', 'blockchain_linked',
+            'polyscan_url', 'is_expired', 'is_valid', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'blockchain_linked', 'polyscan_url', 'is_expired', 'is_valid']
+    
+    def get_blockchain_linked(self, obj):
+        return bool(obj.blockchain_hash)
+    
+    def get_polyscan_url(self, obj):
+        if obj.blockchain_hash:
+            return f"https://polygonscan.com/tx/{obj.blockchain_hash}"
+        return None
+    
+    def get_is_expired(self, obj):
+        from django.utils import timezone
+        return obj.expiration_date < timezone.now() if obj.expiration_date else False
+    
+    def get_is_valid(self, obj):
+        from django.utils import timezone
+        return not obj.revoked and (obj.expiration_date > timezone.now() if obj.expiration_date else True)
+    
+    def validate_blockchain_hash(self, value):
+        import re
+        if value and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError('Formato de hash blockchain inválido.')
+        return value
+    
+    def validate_certifying_authority(self, value):
+        if value.role != 'auditor':
+            raise serializers.ValidationError('El usuario debe tener el rol de auditor.')
+        return value
+
+class AnimalCertificationCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnimalCertification
+        fields = ['animal', 'standard', 'certification_date', 'expiration_date', 'certifying_authority', 'evidence']
+
+class CertificationEvidenceSerializer(serializers.Serializer):
+    document_url = serializers.URLField()
+    inspection_date = serializers.DateField()
+    inspector_name = serializers.CharField(max_length=200)
+    compliance_score = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100)
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+# Serializers para Sistema de Gobernanza Mejorado
+class GovernanceProposalSerializer(serializers.ModelSerializer):
+    proposed_by_name = serializers.CharField(source='proposed_by.get_full_name', read_only=True)
+    proposed_by_email = serializers.EmailField(source='proposed_by.email', read_only=True)
+    proposal_type_display = serializers.CharField(source='get_proposal_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    voting_status = serializers.SerializerMethodField(read_only=True)
+    total_votes = serializers.SerializerMethodField(read_only=True)
+    yes_votes = serializers.SerializerMethodField(read_only=True)
+    no_votes = serializers.SerializerMethodField(read_only=True)
+    parameters_prettified = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = GovernanceProposal
+        fields = [
+            'id', 'title', 'description', 'proposal_type', 'proposal_type_display',
+            'proposed_by', 'proposed_by_name', 'proposed_by_email', 'created_at',
+            'voting_start', 'voting_end', 'parameters', 'parameters_prettified',
+            'status', 'status_display', 'blockchain_proposal_id', 'voting_status',
+            'total_votes', 'yes_votes', 'no_votes'
+        ]
+        read_only_fields = ['created_at', 'voting_status', 'total_votes', 'yes_votes', 'no_votes', 'parameters_prettified']
+    
+    def get_voting_status(self, obj):
+        from django.utils import timezone
+        now = timezone.now()
+        if now < obj.voting_start:
+            return 'PENDING'
+        elif obj.voting_start <= now <= obj.voting_end:
+            return 'ACTIVE'
+        else:
+            return 'COMPLETED'
+    
+    def get_total_votes(self, obj):
+        return obj.votes.count()
+    
+    def get_yes_votes(self, obj):
+        return obj.votes.filter(vote_value=True).count()
+    
+    def get_no_votes(self, obj):
+        return obj.votes.filter(vote_value=False).count()
+    
+    def get_parameters_prettified(self, obj):
+        return json.dumps(obj.parameters, indent=2, ensure_ascii=False) if obj.parameters else None
+
+class VoteSerializer(serializers.ModelSerializer):
+    voter_name = serializers.CharField(source='voter.get_full_name', read_only=True)
+    voter_email = serializers.EmailField(source='voter.email', read_only=True)
+    proposal_title = serializers.CharField(source='proposal.title', read_only=True)
+    vote_value_display = serializers.CharField(source='get_vote_value_display', read_only=True)
+    polyscan_url = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = Vote
+        fields = [
+            'id', 'proposal', 'proposal_title', 'voter', 'voter_name', 'voter_email',
+            'vote_value', 'vote_value_display', 'voting_power', 'blockchain_vote_hash',
+            'polyscan_url', 'created_at'
+        ]
+        read_only_fields = ['created_at', 'polyscan_url']
+    
+    def get_polyscan_url(self, obj):
+        if obj.blockchain_vote_hash:
+            return f"https://polygonscan.com/tx/{obj.blockchain_vote_hash}"
+        return None
+    
+    def validate_blockchain_vote_hash(self, value):
+        import re
+        if value and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError('Formato de hash blockchain inválido.')
+        return value
+
+class CreateVoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vote
+        fields = ['proposal', 'vote_value']
+
+class ProposalParameterSerializer(serializers.Serializer):
+    parameter_name = serializers.CharField(max_length=100)
+    current_value = serializers.CharField()
+    proposed_value = serializers.CharField()
+    description = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+# Serializers para Comercio y Mercado
+class MarketListingSerializer(serializers.ModelSerializer):
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True)
+    animal_breed = serializers.CharField(source='animal.breed', read_only=True)
+    animal_health_status = serializers.CharField(source='animal.health_status', read_only=True)
+    seller_name = serializers.CharField(source='seller.get_full_name', read_only=True)
+    seller_email = serializers.EmailField(source='seller.email', read_only=True)
+    is_expired = serializers.SerializerMethodField(read_only=True)
+    days_until_expiration = serializers.SerializerMethodField(read_only=True)
+    polyscan_url = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = MarketListing
+        fields = [
+            'id', 'animal', 'animal_ear_tag', 'animal_breed', 'animal_health_status',
+            'seller', 'seller_name', 'seller_email', 'price', 'currency',
+            'listing_date', 'expiration_date', 'is_active', 'blockchain_listing_id',
+            'is_expired', 'days_until_expiration', 'polyscan_url'
+        ]
+        read_only_fields = ['listing_date', 'is_expired', 'days_until_expiration', 'polyscan_url']
+    
+    def get_is_expired(self, obj):
+        from django.utils import timezone
+        return obj.expiration_date < timezone.now() if obj.expiration_date else False
+    
+    def get_days_until_expiration(self, obj):
+        from django.utils import timezone
+        if obj.expiration_date:
+            delta = obj.expiration_date - timezone.now()
+            return max(0, delta.days)
+        return None
+    
+    def get_polyscan_url(self, obj):
+        if obj.blockchain_listing_id:
+            # Asumiendo que el listing ID se puede usar para construir una URL
+            return f"https://polygonscan.com/address/{obj.blockchain_listing_id}"
+        return None
+
+class TradeSerializer(serializers.ModelSerializer):
+    animal_ear_tag = serializers.CharField(source='listing.animal.ear_tag', read_only=True)
+    seller_name = serializers.CharField(source='listing.seller.get_full_name', read_only=True)
+    buyer_name = serializers.CharField(source='buyer.get_full_name', read_only=True)
+    polyscan_url = serializers.SerializerMethodField(read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = Trade
+        fields = [
+            'id', 'listing', 'animal_ear_tag', 'buyer', 'buyer_name', 'seller_name',
+            'transaction_hash', 'trade_date', 'price', 'platform_fee',
+            'status', 'status_display', 'polyscan_url'
+        ]
+        read_only_fields = ['trade_date', 'polyscan_url', 'status_display']
+    
+    def get_polyscan_url(self, obj):
+        if obj.transaction_hash:
+            return f"https://polygonscan.com/tx/{obj.transaction_hash}"
+        return None
+    
+    def validate_transaction_hash(self, value):
+        import re
+        if value and not re.match(r'^(0x)?[0-9a-fA-F]{64}$', value):
+            raise serializers.ValidationError('Formato de hash de transacción inválido.')
+        return value
+
+class CreateMarketListingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MarketListing
+        fields = ['animal', 'price', 'currency', 'expiration_date']
+
+class ExecuteTradeSerializer(serializers.Serializer):
+    listing_id = serializers.IntegerField(min_value=1)
+    buyer_wallet = serializers.CharField(max_length=42)
+    
+    def validate_buyer_wallet(self, value):
+        import re
+        if not re.match(r'^(0x)?[0-9a-fA-F]{40}$', value):
+            raise serializers.ValidationError('Formato de wallet inválido.')
+        return value
+
+class MarketStatsSerializer(serializers.Serializer):
+    total_listings = serializers.IntegerField(min_value=0)
+    active_listings = serializers.IntegerField(min_value=0)
+    total_trades = serializers.IntegerField(min_value=0)
+    total_volume = serializers.DecimalField(max_digits=20, decimal_places=2)
+    average_price = serializers.DecimalField(max_digits=20, decimal_places=2)
+    platform_fees = serializers.DecimalField(max_digits=20, decimal_places=2)
+
+class PriceHistorySerializer(serializers.Serializer):
+    animal_id = serializers.IntegerField(min_value=1)
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    
+    def validate(self, data):
+        if data['start_date'] > data['end_date']:
+            raise serializers.ValidationError('La fecha de inicio no puede ser posterior a la fecha de fin.')
+        return data
+    
+# Agregar al final de blockchain/serializers.py
+
+class CreateProposalSerializer(serializers.ModelSerializer):
+    """Serializer para crear nuevas propuestas de gobernanza"""
+    class Meta:
+        model = GovernanceProposal
+        fields = ['title', 'description', 'proposal_type', 'voting_start', 'voting_end', 'parameters']
+    
+    def validate_voting_start(self, value):
+        from django.utils import timezone
+        if value <= timezone.now():
+            raise serializers.ValidationError('La fecha de inicio de votación debe ser en el futuro.')
+        return value
+    
+    def validate_voting_end(self, value):
+        from django.utils import timezone
+        voting_start = self.initial_data.get('voting_start')
+        
+        if voting_start:
+            try:
+                voting_start = timezone.datetime.fromisoformat(voting_start.replace('Z', '+00:00'))
+                if value <= voting_start:
+                    raise serializers.ValidationError('La fecha de fin de votación debe ser posterior a la fecha de inicio.')
+            except (ValueError, TypeError):
+                pass
+        
+        if value <= timezone.now():
+            raise serializers.ValidationError('La fecha de fin de votación debe ser en el futuro.')
+        
+        return value
+    
+    def validate_parameters(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError('Los parámetros deben ser un objeto JSON.')
+        return value
+
+# Agregar al final de blockchain/serializers.py
+
+class PublicCertificationSerializer(serializers.ModelSerializer):
+    """Serializer público para certificaciones (sin información sensible)"""
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True)
+    animal_breed = serializers.CharField(source='animal.breed', read_only=True)
+    standard_name = serializers.CharField(source='standard.name', read_only=True)
+    is_expired = serializers.SerializerMethodField(read_only=True)
+    is_valid = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = AnimalCertification
+        fields = [
+            'id', 'animal_ear_tag', 'animal_breed', 'standard_name',
+            'certification_date', 'expiration_date', 'is_expired', 'is_valid'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_is_expired(self, obj):
+        from django.utils import timezone
+        return obj.expiration_date < timezone.now() if obj.expiration_date else False
+    
+    def get_is_valid(self, obj):
+        from django.utils import timezone
+        return not obj.revoked and (obj.expiration_date > timezone.now() if obj.expiration_date else True)
+    
+    def to_representation(self, instance):
+        """Ocultar información sensible para el público"""
+        data = super().to_representation(instance)
+        # Remover campos sensibles si están presentes
+        sensitive_fields = [
+            'certifying_authority', 'evidence', 'blockchain_hash',
+            'revoked', 'revocation_reason', 'standard'
+        ]
+        for field in sensitive_fields:
+            if field in data:
+                del data[field]
+        return data
+    
+# Agregar al final de blockchain/serializers.py
+
+class PublicBlockchainEventSerializer(serializers.ModelSerializer):
+    """Serializer público para eventos blockchain (sin información sensible)"""
+    event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
+    short_hash = serializers.CharField(read_only=True)
+    polyscan_url = serializers.CharField(read_only=True)
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True, allow_null=True)
+    batch_name = serializers.CharField(source='batch.name', read_only=True, allow_null=True)
+    
+    class Meta:
+        model = BlockchainEvent
+        fields = [
+            'id', 'event_type', 'event_type_display', 'short_hash',
+            'block_number', 'animal_ear_tag', 'batch_name', 'polyscan_url',
+            'created_at'
+        ]
+        read_only_fields = ['created_at', 'short_hash', 'polyscan_url']
+    
+    def to_representation(self, instance):
+        """Ocultar información sensible para el público"""
+        data = super().to_representation(instance)
+        # Remover campos sensibles
+        sensitive_fields = [
+            'transaction_hash', 'from_address', 'to_address', 'metadata',
+            'animal', 'batch'
+        ]
+        for field in sensitive_fields:
+            if field in data:
+                del data[field]
+        return data

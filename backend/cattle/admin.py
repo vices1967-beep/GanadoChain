@@ -2,20 +2,20 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django import forms
-from .models import Animal, AnimalHealthRecord, Batch
-from .blockchain_models import BlockchainEventState
+from .models import Animal, AnimalHealthRecord, Batch, AnimalGeneticProfile, FeedingRecord
+from .blockchain_models import BlockchainEventState, CertificationStandard, AnimalCertification
 from .audit_models import CattleAuditTrail
 from iot.models import IoTDevice
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Q  # ✅ IMPORTAR AQUÍ
+from django.db.models import Count, Q, Sum, Avg
 
 User = get_user_model()
 
 class AnimalHealthRecordInline(admin.TabularInline):
     model = AnimalHealthRecord
     extra = 0
-    readonly_fields = ['created_at', 'blockchain_linked_display', 'polyscan_link']
-    fields = ['health_status', 'source', 'temperature', 'heart_rate', 'movement_activity', 'created_at', 'blockchain_linked_display', 'polyscan_link']
+    readonly_fields = ['created_at', 'blockchain_linked_display', 'polyscan_link_method']
+    fields = ['health_status', 'source', 'temperature', 'heart_rate', 'movement_activity', 'created_at', 'blockchain_linked_display', 'polyscan_link_method']
     can_delete = False
     max_num = 5
     
@@ -25,8 +25,64 @@ class AnimalHealthRecordInline(admin.TabularInline):
         return format_html('<span style="color: red;">❌ No</span>')
     blockchain_linked_display.short_description = 'En Blockchain'
     
+    def polyscan_link_method(self, obj):
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
+            return format_html('<a href="{}" target="_blank">🔗 PolyScan</a>', obj.polyscan_url)
+        return "N/A"
+    polyscan_link_method.short_description = 'Blockchain'
+    
     def has_add_permission(self, request, obj=None):
         return True
+
+class FeedingRecordInline(admin.TabularInline):
+    model = FeedingRecord
+    extra = 0
+    readonly_fields = ['created_at', 'blockchain_linked_display', 'polyscan_link_method']
+    fields = ['feed_type', 'quantity_kg', 'feeding_date', 'location', 'supplier', 'blockchain_linked_display', 'polyscan_link_method']
+    can_delete = False
+    max_num = 3
+    
+    def blockchain_linked_display(self, obj):
+        if obj.blockchain_hash:
+            return format_html('<span style="color: green;">✅ Sí</span>')
+        return format_html('<span style="color: red;">❌ No</span>')
+    blockchain_linked_display.short_description = 'En Blockchain'
+    
+    def polyscan_link_method(self, obj):
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
+            return format_html('<a href="{}" target="_blank">🔗 PolyScan</a>', obj.polyscan_url)
+        return "N/A"
+    polyscan_link_method.short_description = 'Blockchain'
+
+class AnimalCertificationInline(admin.TabularInline):
+    model = AnimalCertification
+    extra = 0
+    readonly_fields = ['created_at', 'expiration_status', 'blockchain_linked_display', 'polyscan_link_method']
+    fields = ['standard', 'certification_date', 'expiration_date', 'expiration_status', 'certifying_authority', 'blockchain_linked_display', 'polyscan_link_method']
+    can_delete = False
+    max_num = 3
+    
+    def expiration_status(self, obj):
+        from django.utils.timezone import now
+        if obj.expiration_date < now():
+            return format_html('<span style="color: red;">❌ Expirada</span>')
+        elif (obj.expiration_date - now()).days < 30:
+            return format_html('<span style="color: orange;">⚠️ Próxima a expirar</span>')
+        else:
+            return format_html('<span style="color: green;">✅ Vigente</span>')
+    expiration_status.short_description = 'Estado'
+    
+    def blockchain_linked_display(self, obj):
+        if obj.blockchain_hash:
+            return format_html('<span style="color: green;">✅ Sí</span>')
+        return format_html('<span style="color: red;">❌ No</span>')
+    blockchain_linked_display.short_description = 'En Blockchain'
+    
+    def polyscan_link_method(self, obj):
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
+            return format_html('<a href="{}" target="_blank">🔗 PolyScan</a>', obj.polyscan_url)
+        return "N/A"
+    polyscan_link_method.short_description = 'Blockchain'
 
 class IoTDeviceInline(admin.TabularInline):
     model = IoTDevice
@@ -65,6 +121,142 @@ class CattleAuditTrailInline(admin.TabularInline):
     
     def has_add_permission(self, request, obj=None):
         return False
+
+@admin.register(AnimalGeneticProfile)
+class AnimalGeneticProfileAdmin(admin.ModelAdmin):
+    list_display = ['animal_link', 'genetic_marker', 'breed_composition_summary', 'blockchain_linked_display', 'created_at']
+    list_filter = ['created_at', 'genetic_marker']
+    search_fields = ['animal__ear_tag', 'genetic_marker', 'blockchain_hash']
+    readonly_fields = ['animal_link', 'created_at', 'updated_at', 'blockchain_linked_display', 'polyscan_link_method']
+    
+    def animal_link(self, obj):
+        if obj.animal:
+            url = reverse('admin:cattle_animal_change', args=[obj.animal.id])
+            return format_html('<a href="{}">{}</a>', url, obj.animal.ear_tag)
+        return "-"
+    animal_link.short_description = 'Animal'
+    
+    def breed_composition_summary(self, obj):
+        if obj.breed_composition:
+            return ", ".join([f"{k}: {v}%" for k, v in obj.breed_composition.items()][:3])
+        return "No disponible"
+    breed_composition_summary.short_description = 'Composición Racial'
+    
+    def blockchain_linked_display(self, obj):
+        if obj.blockchain_hash:
+            return format_html('<span style="color: green;">✅ Sí</span>')
+        return format_html('<span style="color: red;">❌ No</span>')
+    blockchain_linked_display.short_description = 'En Blockchain'
+    
+    def polyscan_link_method(self, obj):
+        if obj.blockchain_hash:
+            url = f"https://amoy.polygonscan.com/tx/{obj.blockchain_hash}"
+            return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', url)
+        return "—"
+    polyscan_link_method.short_description = 'Blockchain'
+
+@admin.register(FeedingRecord)
+class FeedingRecordAdmin(admin.ModelAdmin):
+    list_display = ['animal_link', 'feed_type', 'quantity_kg', 'feeding_date', 'supplier_link', 'blockchain_linked_display']
+    list_filter = ['feed_type', 'feeding_date', 'supplier']
+    search_fields = ['animal__ear_tag', 'feed_type', 'supplier__username']
+    readonly_fields = ['animal_link', 'supplier_link', 'created_at', 'blockchain_linked_display', 'polyscan_link_method']
+    
+    def animal_link(self, obj):
+        if obj.animal:
+            url = reverse('admin:cattle_animal_change', args=[obj.animal.id])
+            return format_html('<a href="{}">{}</a>', url, obj.animal.ear_tag)
+        return "-"
+    animal_link.short_description = 'Animal'
+    
+    def supplier_link(self, obj):
+        if obj.supplier:
+            url = reverse('admin:users_user_change', args=[obj.supplier.id])
+            return format_html('<a href="{}">{}</a>', url, obj.supplier.username)
+        return "-"
+    supplier_link.short_description = 'Proveedor'
+    
+    def blockchain_linked_display(self, obj):
+        if obj.blockchain_hash:
+            return format_html('<span style="color: green;">✅ Sí</span>')
+        return format_html('<span style="color: red;">❌ No</span>')
+    blockchain_linked_display.short_description = 'En Blockchain'
+    
+    def polyscan_link_method(self, obj):
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
+            return format_html('<a href="{}" target="_blank">🔗 PolyScan</a>', obj.polyscan_url)
+        return "N/A"
+    polyscan_link_method.short_description = 'Blockchain'
+
+@admin.register(CertificationStandard)
+class CertificationStandardAdmin(admin.ModelAdmin):
+    list_display = ['name', 'issuing_authority', 'validity_days', 'is_active_display', 'created_at']
+    list_filter = ['issuing_authority', 'is_active', 'created_at']
+    search_fields = ['name', 'description', 'issuing_authority']
+    readonly_fields = ['created_at', 'updated_at', 'certifications_count']
+    
+    def is_active_display(self, obj):
+        if obj.is_active:
+            return format_html('<span style="color: green;">✅ Activo</span>')
+        return format_html('<span style="color: red;">❌ Inactivo</span>')
+    is_active_display.short_description = 'Estado'
+    
+    def certifications_count(self, obj):
+        count = obj.animalcertification_set.count()
+        return format_html('<strong>{}</strong> certificaciones emitidas', count)
+    certifications_count.short_description = 'Certificaciones'
+
+@admin.register(AnimalCertification)
+class AnimalCertificationAdmin(admin.ModelAdmin):
+    list_display = ['animal_link', 'standard', 'certification_date', 'expiration_date', 'expiration_status', 'certifying_authority_link', 'blockchain_linked_display']
+    list_filter = ['standard', 'certification_date', 'revoked']
+    search_fields = ['animal__ear_tag', 'standard__name', 'certifying_authority__username']
+    readonly_fields = ['animal_link', 'standard_link', 'certifying_authority_link', 'created_at', 'updated_at', 'expiration_status', 'blockchain_linked_display', 'polyscan_link_method']
+    
+    def animal_link(self, obj):
+        if obj.animal:
+            url = reverse('admin:cattle_animal_change', args=[obj.animal.id])
+            return format_html('<a href="{}">{}</a>', url, obj.animal.ear_tag)
+        return "-"
+    animal_link.short_description = 'Animal'
+    
+    def standard_link(self, obj):
+        if obj.standard:
+            url = reverse('admin:cattle_certificationstandard_change', args=[obj.standard.id])
+            return format_html('<a href="{}">{}</a>', url, obj.standard.name)
+        return "-"
+    standard_link.short_description = 'Estándar'
+    
+    def certifying_authority_link(self, obj):
+        if obj.certifying_authority:
+            url = reverse('admin:users_user_change', args=[obj.certifying_authority.id])
+            return format_html('<a href="{}">{}</a>', url, obj.certifying_authority.username)
+        return "-"
+    certifying_authority_link.short_description = 'Autoridad Certificadora'
+    
+    def expiration_status(self, obj):
+        from django.utils.timezone import now
+        if obj.revoked:
+            return format_html('<span style="color: red;">❌ Revocada</span>')
+        elif obj.expiration_date < now():
+            return format_html('<span style="color: red;">❌ Expirada</span>')
+        elif (obj.expiration_date - now()).days < 30:
+            return format_html('<span style="color: orange;">⚠️ Próxima a expirar ({} días)</span>', (obj.expiration_date - now()).days)
+        else:
+            return format_html('<span style="color: green;">✅ Vigente ({} días restantes)</span>', (obj.expiration_date - now()).days)
+    expiration_status.short_description = 'Estado'
+    
+    def blockchain_linked_display(self, obj):
+        if obj.blockchain_hash:
+            return format_html('<span style="color: green;">✅ Sí</span>')
+        return format_html('<span style="color: red;">❌ No</span>')
+    blockchain_linked_display.short_description = 'En Blockchain'
+    
+    def polyscan_link_method(self, obj):
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
+            return format_html('<a href="{}" target="_blank">🔗 PolyScan</a>', obj.polyscan_url)
+        return "N/A"
+    polyscan_link_method.short_description = 'Blockchain'
 
 @admin.register(Animal)
 class AnimalAdmin(admin.ModelAdmin):
@@ -106,9 +298,12 @@ class AnimalAdmin(admin.ModelAdmin):
         'is_minted_display',
         'metadata_uri_display',
         'mint_transaction_link',
-        'polyscan_link',
+        'polyscan_link_method',
         'age_display',
-        'audit_trail_link'
+        'audit_trail_link',
+        'genetic_profile_link',
+        'feeding_records_link',
+        'certifications_link'
     ]
     
     fieldsets = (
@@ -134,8 +329,16 @@ class AnimalAdmin(admin.ModelAdmin):
                 'is_minted_display',
                 'metadata_uri_display',
                 'mint_transaction_link',
-                'polyscan_link'
+                'polyscan_link_method'
             )
+        }),
+        ('Datos Adicionales', {
+            'fields': (
+                'genetic_profile_link',
+                'feeding_records_link',
+                'certifications_link',
+            ),
+            'classes': ('collapse',)
         }),
         ('Auditoría', {
             'fields': (
@@ -147,7 +350,7 @@ class AnimalAdmin(admin.ModelAdmin):
         }),
     )
     
-    inlines = [AnimalHealthRecordInline, IoTDeviceInline]
+    inlines = [AnimalHealthRecordInline, FeedingRecordInline, AnimalCertificationInline, IoTDeviceInline]
     
     def health_status_display(self, obj):
         status_colors = {
@@ -188,14 +391,14 @@ class AnimalAdmin(admin.ModelAdmin):
     mint_transaction_short.short_description = 'Tx Hash'
     
     def mint_transaction_link(self, obj):
-        if obj.polyscan_url:
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
             return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', obj.polyscan_url)
         return "—"
     mint_transaction_link.short_description = 'Enlace Transacción'
     
-    def polyscan_link(self, obj):
+    def polyscan_link_method(self, obj):
         return self.mint_transaction_link(obj)
-    polyscan_link.short_description = 'Explorador'
+    polyscan_link_method.short_description = 'Explorador'
     
     def age_display(self, obj):
         from datetime import date
@@ -210,6 +413,25 @@ class AnimalAdmin(admin.ModelAdmin):
         url = reverse('admin:cattle_cattleaudittrail_changelist') + f'?object_id={obj.id}&object_type=animal'
         return format_html('<a href="{}">📋 Ver Registros de Auditoría</a>', url)
     audit_trail_link.short_description = 'Auditoría'
+    
+    def genetic_profile_link(self, obj):
+        if hasattr(obj, 'genetic_profile'):
+            url = reverse('admin:cattle_animalgeneticprofile_change', args=[obj.genetic_profile.id])
+            return format_html('<a href="{}">🧬 Ver Perfil Genético</a>', url)
+        return "❌ Sin perfil genético"
+    genetic_profile_link.short_description = 'Perfil Genético'
+    
+    def feeding_records_link(self, obj):
+        count = obj.feeding_records.count()
+        url = reverse('admin:cattle_feedingrecord_changelist') + f'?animal__id__exact={obj.id}'
+        return format_html('<a href="{}">🍎 {} Registros de Alimentación</a>', url, count)
+    feeding_records_link.short_description = 'Alimentación'
+    
+    def certifications_link(self, obj):
+        count = obj.certifications.count()
+        url = reverse('admin:cattle_animalcertification_changelist') + f'?animal__id__exact={obj.id}'
+        return format_html('<a href="{}">📜 {} Certificaciones</a>', url, count)
+    certifications_link.short_description = 'Certificaciones'
 
 @admin.register(AnimalHealthRecord)
 class AnimalHealthRecordAdmin(admin.ModelAdmin):
@@ -244,7 +466,7 @@ class AnimalHealthRecordAdmin(admin.ModelAdmin):
     readonly_fields = [
         'created_at',
         'blockchain_linked_display',
-        'polyscan_link',
+        'polyscan_link_method',
         'animal_link',
         'audit_trail_link'
     ]
@@ -273,7 +495,7 @@ class AnimalHealthRecordAdmin(admin.ModelAdmin):
                 'transaction_hash',
                 'blockchain_hash',
                 'blockchain_linked_display',
-                'polyscan_link'
+                'polyscan_link_method'
             )
         }),
         ('Auditoría', {
@@ -334,11 +556,11 @@ class AnimalHealthRecordAdmin(admin.ModelAdmin):
         return format_html('<span style="color: red;">❌ No</span>')
     blockchain_linked_display.short_description = 'En Blockchain'
     
-    def polyscan_link(self, obj):
-        if obj.polyscan_url:
+    def polyscan_link_method(self, obj):
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
             return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', obj.polyscan_url)
         return "—"
-    polyscan_link.short_description = 'Transacción'
+    polyscan_link_method.short_description = 'Transacción'
     
     def audit_trail_link(self, obj):
         url = reverse('admin:cattle_cattleaudittrail_changelist') + f'?object_id={obj.id}&object_type=health_record'
@@ -378,17 +600,17 @@ class BatchAdmin(admin.ModelAdmin):
         'destination',
         'status_display',
         'minted_animals_count_display',
-        'get_total_animals_count',  # ✅ Cambiado a método
+        'get_total_animals_count',
         'created_by',
         'created_at',
-        'on_blockchain'  # ✅ Nuevo campo agregado
+        'on_blockchain'
     ]
     
     list_filter = [
         'status',
         'created_by',
         'created_at',
-        'on_blockchain'  # ✅ Nuevo filtro
+        'on_blockchain'
     ]
     
     search_fields = [
@@ -404,10 +626,10 @@ class BatchAdmin(admin.ModelAdmin):
         'created_at',
         'updated_at',
         'minted_animals_count_display',
-        'get_total_animals_count_display',  # ✅ Cambiado a método
-        'polyscan_link',
+        'get_total_animals_count_display',
+        'polyscan_link_method',
         'audit_trail_link',
-        'on_blockchain'  # ✅ Solo lectura (se actualiza automáticamente)
+        'on_blockchain'
     ]
     
     fieldsets = (
@@ -418,20 +640,20 @@ class BatchAdmin(admin.ModelAdmin):
                 'destination',
                 'status',
                 'created_by',
-                'on_blockchain'  # ✅ Nuevo campo
+                'on_blockchain'
             )
         }),
         ('Animales', {
             'fields': (
                 'minted_animals_count_display',
-                'get_total_animals_count_display',  # ✅ Cambiado
+                'get_total_animals_count_display',
             )
         }),
         ('Blockchain', {
             'fields': (
                 'ipfs_hash',
                 'blockchain_tx',
-                'polyscan_link'
+                'polyscan_link_method'
             )
         }),
         ('Auditoría', {
@@ -463,7 +685,6 @@ class BatchAdmin(admin.ModelAdmin):
         return f"{obj.minted_animals_count} / {obj.total_animals_count}"
     minted_animals_count_display.short_description = 'Animales con NFT'
     
-    # ✅ NUEVOS MÉTODOS PARA REEMPLAZAR LA PROPERTY
     def get_total_animals_count(self, obj):
         return obj.total_animals_count
     get_total_animals_count.short_description = 'Total Animales'
@@ -472,11 +693,11 @@ class BatchAdmin(admin.ModelAdmin):
         return obj.total_animals_count
     get_total_animals_count_display.short_description = 'Total Animales'
     
-    def polyscan_link(self, obj):
-        if obj.polyscan_url:
+    def polyscan_link_method(self, obj):
+        if hasattr(obj, 'polyscan_url') and obj.polyscan_url:
             return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', obj.polyscan_url)
         return "—"
-    polyscan_link.short_description = 'Transacción'
+    polyscan_link_method.short_description = 'Transacción'
     
     def audit_trail_link(self, obj):
         url = reverse('admin:cattle_cattleaudittrail_changelist') + f'?object_id={obj.id}&object_type=batch'
@@ -484,11 +705,10 @@ class BatchAdmin(admin.ModelAdmin):
     audit_trail_link.short_description = 'Auditoría'
 
     def save_model(self, request, obj, form, change):
-        if not change:  # Solo al crear
+        if not change:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
     
-    # ✅ OPCIÓN ALTERNATIVA: Usar annotations para mejor performance
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.annotate(
@@ -543,7 +763,7 @@ class CattleAuditTrailAdmin(admin.ModelAdmin):
         'ip_address',
         'blockchain_tx_hash',
         'timestamp',
-        'polyscan_link'
+        'polyscan_link_method'
     ]
     
     fieldsets = (
@@ -567,14 +787,13 @@ class CattleAuditTrailAdmin(admin.ModelAdmin):
             'fields': (
                 'ip_address',
                 'blockchain_tx_hash',
-                'polyscan_link'
+                'polyscan_link_method'
             ),
             'classes': ('collapse',)
         }),
     )
     
     def object_id_display(self, obj):
-        # Crear enlace al objeto auditado según su tipo
         if obj.object_type == 'animal':
             url = reverse('admin:cattle_animal_change', args=[obj.object_id])
             return format_html('<a href="{}">Animal #{}</a>', url, obj.object_id)
@@ -624,12 +843,13 @@ class CattleAuditTrailAdmin(admin.ModelAdmin):
         return format_html('<span style="color: red;">❌ No</span>')
     blockchain_linked_display.short_description = 'En Blockchain'
     
-    def polyscan_link(self, obj):
+    def polyscan_link_method(self, obj):
         if obj.blockchain_tx_hash:
             url = f"https://amoy.polygonscan.com/tx/{obj.blockchain_tx_hash}"
             return format_html('<a href="{}" target="_blank">🔗 Ver en PolyScan</a>', url)
         return "—"
-    polyscan_link.short_description = 'Transacción Blockchain'
+    polyscan_link_method.short_description = 'Transacción Blockchain'
+
 
 @admin.register(BlockchainEventState)
 class BlockchainEventStateAdmin(admin.ModelAdmin):
