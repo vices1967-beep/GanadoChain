@@ -614,3 +614,56 @@ class StakingPoolCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = StakingPool
         fields = ['user', 'tokens_staked', 'staking_duration', 'apy', 'blockchain_staking_id']
+
+# users/serializers.py - AÑADE ESTO
+
+class LoginSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True)
+
+    def validate(self, data):
+        username = data.get('username')
+        password = data.get('password')
+
+        if not username or not password:
+            raise serializers.ValidationError("Debe proporcionar usuario y contraseña.")
+
+        # Usar el backend de Django para autenticar
+        from django.contrib.auth import authenticate
+        user = authenticate(username=username, password=password)
+
+        if not user:
+            raise serializers.ValidationError("Credenciales inválidas.")
+
+        if not user.is_active:
+            raise serializers.ValidationError("Usuario desactivado.")
+
+        data['user'] = user
+        return data
+    
+# users/serializers.py - AÑADE ESTO AL FINAL
+
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Añadir información personalizada al token
+        token['username'] = user.username
+        token['role'] = user.role
+        token['user_id'] = user.id
+        token['wallet_address'] = user.wallet_address
+        
+        return token
+
+    def validate(self, attrs):
+        # Usa username como campo de autenticación (ya está configurado en User)
+        data = super().validate(attrs)
+        
+        # Asegurarnos de que el usuario tenga un username válido
+        if not self.user.username:
+            raise serializers.ValidationError("Usuario no válido")
+            
+        return data

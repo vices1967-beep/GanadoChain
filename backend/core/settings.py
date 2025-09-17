@@ -78,6 +78,7 @@ else:
 
 INSTALLED_APPS = [
     # Django core
+    'corsheaders',  # ← ¡DEBE IR AL PRINCIPIO!
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -89,7 +90,6 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'rest_framework_simplejwt',
-    'corsheaders',
     'drf_spectacular',
     'django_filters',
     
@@ -246,6 +246,25 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Opcional: si quieres permitir ciertos headers
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'authorization',
+    'content-type',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Opcional: permitir solo métodos necesarios
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
 
 # Configuración de seguridad adicional

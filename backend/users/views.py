@@ -1,10 +1,10 @@
 from rest_framework import generics, permissions, status, viewsets
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.db.models import Count, Q
@@ -17,7 +17,8 @@ from .serializers import (
     PasswordResetRequestSerializer, PasswordResetConfirmSerializer,
     UserSearchSerializer, UserRoleUpdateSerializer, VerifyWalletSerializer,
     UserExportSerializer, UserDetailSerializer, NotificationSerializer,
-    UserRoleSerializer, ReputationScoreSerializer, NotificationCreateSerializer
+    UserRoleSerializer, ReputationScoreSerializer, NotificationCreateSerializer, 
+    CustomTokenObtainPairSerializer, LoginSerializer  
 )
 from .models import UserActivityLog, UserPreference, APIToken
 from .notification_models import Notification
@@ -26,6 +27,26 @@ import logging
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_view(request):
+    serializer = LoginSerializer(data=request.data)  # ← Usa el nuevo serializador
+    if serializer.is_valid():
+        user = serializer.validated_data['user']
+        
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'token': str(refresh.access_token),
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'role': user.role,
+            }
+        }, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class UserViewSet(viewsets.ModelViewSet):
     serializer_class = UserProfileSerializer
@@ -351,15 +372,25 @@ class UserRegistrationView(generics.CreateAPIView):
             ip = request.META.get('REMOTE_ADDR')
         return ip
 
+# users/views.py - REEMPLAZA LA CLASE COMPLETA POR ESTA
+
 class UserTokenObtainPairView(TokenObtainPairView):
-    serializer_class = None  # TokenObtainPairView ya tiene su propio serializer
-    
+    serializer_class = CustomTokenObtainPairSerializer  # ✅ Usa tu serializador personalizado
+
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
-        
+
         if response.status_code == 200:
-            # Obtener usuario desde el username
+            # Extraer username del request (viene del serializer)
             username = request.data.get('username')
+            if not username:
+                # Si por alguna razón no viene, intentamos obtenerlo del token generado
+                try:
+                    user = self.serializer_class.get_token(request.user).user
+                    username = user.username
+                except:
+                    pass
+
             try:
                 user = User.objects.get(username=username)
                 
@@ -368,14 +399,16 @@ class UserTokenObtainPairView(TokenObtainPairView):
                     user=user,
                     action='LOGIN',
                     ip_address=self.get_client_ip(request),
-                    user_agent=request.META.get('HTTP_USER_AGENT', '')
+                    user_agent=request.META.get('HTTP_USER_AGENT', ''),
+                    metadata={'login_method': 'username_password'}
                 )
                 
             except User.DoesNotExist:
+                # Esto debería ser muy raro si el JWT se generó correctamente
                 pass
-        
+
         return response
-    
+
     def get_client_ip(self, request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:

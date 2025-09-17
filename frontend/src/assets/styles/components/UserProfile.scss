@@ -1,0 +1,35 @@
+// src/assets/styles/components/UserProfile.scss
+.user-profile {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+
+  .stats-grid {
+    margin-top: 20px;
+  }
+
+  .MuiCard {
+    margin-bottom: 20px;
+    
+    &-content {
+      padding: 24px;
+    }
+  }
+
+  .MuiList {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .MuiChip {
+    margin-left: 8px;
+  }
+
+  @media (max-width: 768px) {
+    padding: 10px;
+    
+    .stats-grid {
+      margin-top: 10px;
+    }
+  }
+}

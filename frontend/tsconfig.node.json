@@ -1,4 +1,4 @@
-echo '{
+{
   "compilerOptions": {
     "composite": true,
     "skipLibCheck": true,
@@ -7,4 +7,4 @@ echo '{
     "allowSyntheticDefaultImports": true
   },
   "include": ["vite.config.ts"]
-}' > tsconfig.node.json
+}

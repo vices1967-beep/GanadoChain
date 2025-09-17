@@ -1,0 +1,1 @@
+# Estructura Optimizada GanadoChain Frontend

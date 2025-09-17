@@ -108,6 +108,9 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # ✅ ¡AÑADE ESTA LÍNEA AHORA MISMO!
+    USERNAME_FIELD = 'username'
+
     class Meta:
         verbose_name = "Usuario"
         verbose_name_plural = "Usuarios"

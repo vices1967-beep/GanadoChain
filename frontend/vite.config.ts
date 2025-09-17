@@ -1,19 +1,22 @@
-import { defineConfig } from "vite"
-import react from "@vitejs/plugin-react"
-import { resolve } from "path"
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import viteTsconfigPaths from 'vite-tsconfig-paths'
+import checker from 'vite-plugin-checker'
 
 export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      "@": resolve(__dirname, "./src"),
-    }
-  },
+  plugins: [
+    react(),
+    viteTsconfigPaths(),
+    checker({
+      typescript: true,
+    }),
+  ],
   server: {
     port: 3000,
     open: true,
-    hmr: {
-      overlay: false
-    }
-  }
+
+  },
+  build: {
+    outDir: 'build',
+  },
 })
