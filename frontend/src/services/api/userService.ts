@@ -1,5 +1,5 @@
 // src/services/api/userService.ts
-import api from '../../types/services/apiClient';
+import api from '../apiClient';
 import { User, UserPreference, Notification, ActivityLog, ApiToken } from '../../types/domain/user';
 
 export const userService = {

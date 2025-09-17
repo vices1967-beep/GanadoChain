@@ -110,6 +110,23 @@ export const authService = {
     return response.data;
   },
 
+  async refreshToken(): Promise<{ access: string }> {
+    const refreshToken = localStorage.getItem(JWT_REFRESH_TOKEN_KEY);
+    
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    const response = await api.post(REFRESH_TOKEN_URL, {
+      refresh: refreshToken
+    });
+
+    if (response.data.access) {
+      localStorage.setItem(JWT_ACCESS_TOKEN_KEY, response.data.access);
+    }
+
+    return response.data;
+  },
   async register(userData: any): Promise<any> {
     const response = await api.post(REGISTER_URL, userData);
     return response.data;
