@@ -1,0 +1,13 @@
+[package]
+name = "starknet_contracts"
+version = "0.1.0"
+edition = "2023_11" 
+
+
+[dependencies]
+starknet = ">=2.3.0"
+# openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v0.14.0" }
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
