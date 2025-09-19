@@ -72,11 +72,63 @@ GanadoChain/
 ### Prerequisites
 
 ### 1. Clone and Setup
-
+# Clonar el repositorio
+```bash
+git clone https://github.com/vices1967-beep/GanadoChain
+cd GanadoChain
+```
+# Configurar entorno virtual Python
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+# Configurar dependencias Node.js
+```bash
+cd ../frontend
+npm install
+```
+# Compilar contratos StarkNet
+```bash
+cd ../starknet
+scarb build
+```
 ### 2. Run the Oracle & Demo
+#### Terminal 1 - Start Django backend
+```bash
+cd backend
+python manage.py migrate
+python manage.py runserver
+```
 
+#### Terminal 2 - Start event listener for Bitcoin certification
+```bash
+python manage.py listen_btc
+```
+#### Terminal 3 - Start React frontend
+```bash
+cd frontend
+npm run dev
+```
+#### Terminal 4 - (Optional) Start local blockchain for testing
+```bash
+docker-compose up -d
+```
 ### 3. Experience the Bitcoin Flow
+Access the application at http://localhost:3000
 
+Navigate to the Admin Demo tab
+
+Select a livestock batch from the available options
+
+Click "Certify on Bitcoin" to initiate the certification process
+
+Monitor the terminals to see the Oracle processing and minting the Bitcoin NFT
+
+Scan the generated QR code in the Verify tab to view the Bitcoin proof
+
+Verify the transaction on the Bitcoin testnet explorer using the provided TX hash
 ## 📱 Demo Video
 
 ## 🔮 Future Vision
@@ -179,9 +231,10 @@ GanadoChain/
 
 ### 1. Clonar y Configurar
 # Clonar el repositorio
+```bash
 git clone https://github.com/vices1967-beep/GanadoChain
 cd GanadoChain
-
+```
 # Configurar entorno virtual Python
 ```bash
 cd backend
@@ -217,7 +270,9 @@ cd frontend
 npm run dev
 ```
 #### Terminal 4 - (Opcional) Iniciar blockchain local para testing
+```bash
 docker-compose up -d
+```
 ### 3. Experimenta el Flujo Bitcoin
 Accede a la aplicación en http://localhost:3000
 
