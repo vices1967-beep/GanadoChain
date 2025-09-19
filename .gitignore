@@ -207,3 +207,83 @@ frontend/.cache/
 # Ficheros de base de datos (excepto si quieres versionar un SQLite de desarrollo)
 *.db
 *.db-journal
+
+# =========================
+# StarkNet / Cairo
+# =========================
+# Directorio de compilación de Scarb
+starknet/target/
+**/target/
+
+# Archivos de compilación de contratos
+*.sierra
+*.casm
+*.json
+
+# Archivos de desarrollo de StarkNet
+*.build/
+
+# =========================
+# Python / Django
+# =========================
+# Archivos de base de datos de desarrollo
+*.sqlite3
+*.sqlite
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Archivos de entorno
+.env
+.env.local
+
+# Logs de aplicaciones
+*.log
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
+# Directorios de IDE
+.vscode/
+.idea/
+
+# =========================
+# Node.js (si aplica)
+# =========================
+node_modules/
+npm-debug.log*
+
+# =========================
+# Archivos de backup temporales
+# =========================
+backup.json
+*.backup
+*.bak
+
+# =========================
+# Archivos de construcción
+# =========================
+build/
+dist/
+*.egg-info/
+
+# =========================
+# Cache de Python
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+
+# =========================
+# Testing y coverage
+# =========================
+.coverage
+htmlcov/
+.pytest_cache/
