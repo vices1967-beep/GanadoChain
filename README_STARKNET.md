@@ -54,7 +54,7 @@ This project focuses on the certification flow. The full vision includes:
 Explore the feature-rich branch for work-in-progress on these features.
 
 ## 👨‍💻 Team
-- **Victor Viceconti** - Industrial Eng / Full Stack Dev ([GitHub](https://github.com/vices1967-beep))
+- **Victor Viceconti** - Industrial Eng / Full Stack Dev ([GitHub](https://github.com/vices1967-beep)) 
 
 ## 🎯 Technical Implementation
 
