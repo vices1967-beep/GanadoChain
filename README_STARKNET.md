@@ -30,6 +30,42 @@ This is the core demo flow:
 
 ## 🛠️ Project Structure
 
+```tree
+GanadoChain/
+├── backend/                 # Django REST API + Oracle
+│   ├── analytics/          # Data analysis and analytics modules
+│   ├── blockchain/         # Blockchain integration layer
+│   ├── cattle/             # Livestock management application
+│   ├── core/               # Core configuration and settings
+│   ├── governance/         # DAO and token governance system
+│   ├── iot/                # IoT data processing and integration
+│   ├── market/             # Marketplace functionality
+│   ├── reports/            # Reporting and analytics dashboard
+│   ├── rewards/            # Token rewards and incentive system
+│   ├── users/              # User authentication and management
+│   ├── requirements.txt    # Python dependencies and packages
+│   └── manage.py           # Django management script
+├── frontend/               # React/Vite frontend application
+│   ├── src/
+│   │   ├── components/     # Reusable React components
+│   │   ├── pages/         # Application pages and routes
+│   │   ├── hooks/         # Custom React hooks
+│   │   └── utils/         # Utility functions and helpers
+│   ├── package.json       # Node.js dependencies and scripts
+│   └── vite.config.js     # Vite build configuration
+├── starknet/               # StarkNet smart contracts (Cairo)
+│   ├── src/
+│   │   ├── AnimalNFT.cairo      # ERC-721 for animal tokenization
+│   │   ├── GanadoRegistry.cairo # Main registry and certification contract
+│   │   └── lib.cairo            # Library functions and utilities
+│   ├── Scarb.toml         # Project configuration and dependencies
+│   ├── Scarb.lock         # Dependency lock file
+│   └── target/            # Compiled artifacts (gitignored)
+└── hardhat/               # Legacy Ethereum contracts (reference)
+    ├── contracts/         # Solidity smart contracts
+    ├── scripts/           # Deployment and interaction scripts
+    └── test/              # Contract tests and validation
+```
 
 ## ⚡ Quick Start: Experience the Demo
 
@@ -101,6 +137,7 @@ Este es el flujo central de demostración:
 6. **Verificación del Consumidor:** Usuarios finales escanean un código QR para verificar todo el historial, culminando con la prueba Bitcoin.
 
 ## 🛠️ Estructura del Proyecto
+```tree
 GanadoChain/
 ├── backend/                 # API REST Django + Oracle
 │   ├── analytics/          # Módulos de análisis de datos
@@ -135,6 +172,7 @@ GanadoChain/
     ├── contracts/         # Contratos inteligentes Solidity
     ├── scripts/           # Scripts de despliegue
     └── test/              # Tests de contratos
+```
 ## ⚡ Inicio Rápido: Experimenta la Demostración
 
 ### Prerrequisitos
@@ -145,32 +183,39 @@ git clone https://github.com/vices1967-beep/GanadoChain
 cd GanadoChain
 
 # Configurar entorno virtual Python
+```bash
 cd backend
 python -m venv venv
 source venv/bin/activate  # En Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
+```
 # Configurar dependencias Node.js
+```bash
 cd ../frontend
 npm install
-
+```
 # Compilar contratos StarkNet
+```bash
 cd ../starknet
 scarb build
-
+```
 ### 2. Ejecutar el Oracle y la Demostración
 #### Terminal 1 - Iniciar backend Django
+```bash
 cd backend
 python manage.py migrate
 python manage.py runserver
+```
 
 #### Terminal 2 - Iniciar listener de eventos para certificación Bitcoin
+```bash
 python manage.py listen_btc
-
+```
 #### Terminal 3 - Iniciar frontend React
+```bash
 cd frontend
 npm run dev
-
+```
 #### Terminal 4 - (Opcional) Iniciar blockchain local para testing
 docker-compose up -d
 ### 3. Experimenta el Flujo Bitcoin
