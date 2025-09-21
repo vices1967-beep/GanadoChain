@@ -8,7 +8,8 @@ import {
   Paper
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
-import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+//import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+import { useCattle } from '../../../hooks/cattle/useCattle';
 import BatchList from '../components/BatchList';
 import BatchForm from '../components/BatchForm';
 
@@ -18,7 +19,7 @@ const BatchesView: React.FC = () => {
     loading,
     getBatches,
     createBatch
-  } = useCattleContext();
+  } = useCattle();
 
   const [formOpen, setFormOpen] = useState(false);
 

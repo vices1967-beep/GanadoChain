@@ -20,7 +20,8 @@ import {
 import { useFormik } from 'formik';
 import * as yup from 'yup';
 import { BatchCreateRequest } from '../../../types/domain/cattle';
-import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+//import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+import { useCattle } from '../../../hooks/cattle/useCattle';
 
 interface BatchFormProps {
   open: boolean;
@@ -43,7 +44,7 @@ const BatchForm: React.FC<BatchFormProps> = ({
   initialData,
   loading = false
 }) => {
-  const { animals, getAnimals } = useCattleContext();
+  const { animals, getAnimals } = useCattle();
   const [selectedAnimals, setSelectedAnimals] = useState<any[]>([]);
 
   useEffect(() => {

@@ -1,30 +1,30 @@
 // src/hooks/cattle/useCattleStats.ts
-import { useState, useEffect } from 'react';
-import { useCattle } from './useCattle';
-import { CattleStats } from '../../types/domain/cattle';
+import { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchStats } from '../../stores/slices/cattle.slice';
+import { AppDispatch } from '../../stores/store';
+import { selectStats, selectLoading, selectError } from '../../stores/selectors/cattle.selectors';
 
 export const useCattleStats = () => {
-  const cattle = useCattle();
-  const [stats, setStats] = useState<CattleStats | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const dispatch = useDispatch<AppDispatch>();
+  
+  // Usar selectores de Redux en lugar de estado local
+  const stats = useSelector(selectStats);
+  const loading = useSelector(selectLoading);
+  const error = useSelector(selectError);
 
   const loadStats = async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const statsData = await cattle.getStats();
-      setStats(statsData);
-    } catch (err) {
-      setError(cattle.error);
-    } finally {
-      setLoading(false);
+      await dispatch(fetchStats()).unwrap();
+    } catch (error) {
+      // El error ya está manejado por el slice de Redux
+      console.error('Failed to load cattle stats:', error);
     }
   };
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [dispatch]);
 
   const refreshStats = async () => {
     await loadStats();
@@ -35,6 +35,6 @@ export const useCattleStats = () => {
     loading,
     error,
     refreshStats,
-    clearError: () => setError(null)
+    clearError: () => {} // Los errores se limpian automáticamente en el slice
   };
 };

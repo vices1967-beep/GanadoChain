@@ -1,4 +1,4 @@
-// src/hooks/cattle/useCattleRedux.ts
+// frontend/src/hooks/cattle/useCattleRedux.ts
 import { useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '../../stores/store';
@@ -15,7 +15,27 @@ import {
   clearError,
   clearSelection,
   selectAnimal,
-  selectBatch
+  selectBatch,
+  // Añadir estos nuevos thunks
+  fetchCertificationStandards,
+  fetchAnimalCertifications,
+  revokeCertification,
+  fetchAnimalHealthRecords,
+  mintAnimalNFT,
+  transferAnimal,
+  updateAnimalHealth,
+  verifyAnimalNFT,
+  getAnimalNFTInfo,
+  getAnimalBlockchainEvents,
+  getAnimalAuditTrail,
+  updateBatchStatus,
+  addAnimalsToBatch,
+  removeAnimalsFromBatch,
+  getBatchBlockchainEvents,
+  getBatchAuditTrail,
+  searchBatches,
+  searchAnimals,
+  exportAuditTrail
 } from '../../stores/slices/cattle.slice';
 import {
   selectAnimals,
@@ -28,7 +48,9 @@ import {
   selectLoading,
   selectError,
   selectAnimalsByStatus,
-  selectAnimalsByHealth
+  selectAnimalsByHealth,
+  selectCertifications,
+  selectCertificationStandards
 } from '../../stores/selectors/cattle.selectors';
 
 export const useCattleRedux = () => {
@@ -42,42 +64,52 @@ export const useCattleRedux = () => {
   const selectedBatch = useSelector(selectSelectedBatch);
   const loading = useSelector(selectLoading);
   const error = useSelector(selectError);
+  const certifications = useSelector(selectCertifications);
+  const certificationStandards = useSelector(selectCertificationStandards);
 
-  // Acciones
-  const getAnimals = useCallback((params?: any) => {
-    return dispatch(fetchAnimals(params));
+  // Acciones que devuelven promesas con los datos
+  const getAnimals = useCallback(async (params?: any) => {
+    const result = await dispatch(fetchAnimals(params)).unwrap();
+    return result;
   }, [dispatch]);
 
-  const getAnimal = useCallback((id: number) => {
-    return dispatch(fetchAnimal(id));
+  const getAnimal = useCallback(async (id: number) => {
+    const result = await dispatch(fetchAnimal(id)).unwrap();
+    return result;
   }, [dispatch]);
 
-  const addAnimal = useCallback((animalData: any) => {
-    return dispatch(createAnimal(animalData));
+  const createAnimalAction = useCallback(async (animalData: any) => {
+    const result = await dispatch(createAnimal(animalData)).unwrap();
+    return result;
   }, [dispatch]);
 
-  const modifyAnimal = useCallback((id: number, animalData: any) => {
-    return dispatch(updateAnimal({ id, animalData }));
+  const updateAnimalAction = useCallback(async (id: number, animalData: any) => {
+    const result = await dispatch(updateAnimal({ id, animalData })).unwrap();
+    return result;
   }, [dispatch]);
 
-  const removeAnimal = useCallback((id: number) => {
-    return dispatch(deleteAnimal(id));
+  const deleteAnimalAction = useCallback(async (id: number) => {
+    await dispatch(deleteAnimal(id)).unwrap();
   }, [dispatch]);
 
-  const getBatches = useCallback((params?: any) => {
-    return dispatch(fetchBatches(params));
+  const getBatches = useCallback(async (params?: any) => {
+    const result = await dispatch(fetchBatches(params)).unwrap();
+    return result;
   }, [dispatch]);
 
-  const getBatch = useCallback((id: number) => {
-    return dispatch(fetchBatch(id));
+  const getBatch = useCallback(async (id: number) => {
+    const result = await dispatch(fetchBatch(id)).unwrap();
+    return result;
   }, [dispatch]);
 
-  const addBatch = useCallback((batchData: any) => {
-    return dispatch(createBatch(batchData));
+  const createBatchAction = useCallback(async (batchData: any) => {
+    const result = await dispatch(createBatch(batchData)).unwrap();
+    return result;
   }, [dispatch]);
 
-  const getCattleStats = useCallback(() => {
-    return dispatch(fetchStats());
+  const getStatsAction = useCallback(async () => {
+    const result = await dispatch(fetchStats()).unwrap();
+    return result;
   }, [dispatch]);
 
   const clearCattleError = useCallback(() => {
@@ -96,34 +128,153 @@ export const useCattleRedux = () => {
     dispatch(selectBatch(batch));
   }, [dispatch]);
 
+  // Nuevas funciones que devuelven promesas
+  const getCertificationStandards = useCallback(async () => {
+    const result = await dispatch(fetchCertificationStandards()).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const getAnimalCertifications = useCallback(async (animalId: number) => {
+    const result = await dispatch(fetchAnimalCertifications(animalId)).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const revokeCertificationAction = useCallback(async (certificationId: number, reason: string) => {
+    const result = await dispatch(revokeCertification({ certificationId, reason })).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const getAnimalHealthRecords = useCallback(async (animalId: number) => {
+    const result = await dispatch(fetchAnimalHealthRecords(animalId)).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const mintAnimalNFTAction = useCallback(async (animalId: number, mintData: any) => {
+    const result = await dispatch(mintAnimalNFT({ animalId, mintData })).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const transferAnimalAction = useCallback(async (animalId: number, transferData: any) => {
+    const result = await dispatch(transferAnimal({ animalId, transferData })).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const updateAnimalHealthAction = useCallback(async (animalId: number, healthData: any) => {
+    const result = await dispatch(updateAnimalHealth({ animalId, healthData })).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const verifyAnimalNFTAction = useCallback(async (animalId: number) => {
+    const result = await dispatch(verifyAnimalNFT(animalId)).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const getAnimalNFTInfoAction = useCallback(async (animalId: number) => {
+    const result = await dispatch(getAnimalNFTInfo(animalId)).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const getAnimalBlockchainEventsAction = useCallback(async (animalId: number) => {
+    const result = await dispatch(getAnimalBlockchainEvents(animalId)).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const getAnimalAuditTrailAction = useCallback(async (animalId: number) => {
+    const result = await dispatch(getAnimalAuditTrail(animalId)).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const updateBatchStatusAction = useCallback(async (batchId: number, statusData: any) => {
+    const result = await dispatch(updateBatchStatus({ batchId, statusData })).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const addAnimalsToBatchAction = useCallback(async (batchId: number, animalsData: any) => {
+    const result = await dispatch(addAnimalsToBatch({ batchId, animalsData })).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const removeAnimalsFromBatchAction = useCallback(async (batchId: number, animalsData: any) => {
+    const result = await dispatch(removeAnimalsFromBatch({ batchId, animalsData })).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const getBatchBlockchainEventsAction = useCallback(async (batchId: number) => {
+    const result = await dispatch(getBatchBlockchainEvents(batchId)).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const getBatchAuditTrailAction = useCallback(async (batchId: number) => {
+    const result = await dispatch(getBatchAuditTrail(batchId)).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const searchBatchesAction = useCallback(async (params: any) => {
+    const result = await dispatch(searchBatches(params)).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const searchAnimalsAction = useCallback(async (params: any) => {
+    const result = await dispatch(searchAnimals(params)).unwrap();
+    return result;
+  }, [dispatch]);
+
+  const exportAuditTrailAction = useCallback(async (format?: 'json' | 'csv', days?: number) => {
+    const result = await dispatch(exportAuditTrail({ format, days })).unwrap();
+    return result;
+  }, [dispatch]);
+
   return {
     // Estado
     animals,
     batches,
+    certifications,
+    certificationStandards,
     stats,
     selectedAnimal,
     selectedBatch,
     loading,
     error,
     
-    // Acciones
+    // Acciones (ahora devuelven promesas con los datos)
     getAnimals,
     getAnimal,
-    createAnimal: addAnimal,
-    updateAnimal: modifyAnimal,
-    deleteAnimal: removeAnimal,
+    createAnimal: createAnimalAction,
+    updateAnimal: updateAnimalAction,
+    deleteAnimal: deleteAnimalAction,
     getBatches,
     getBatch,
-    createBatch: addBatch,
-    getStats: getCattleStats,
+    createBatch: createBatchAction,
+    getStats: getStatsAction,
     clearError: clearCattleError,
     clearSelection: clearCattleSelection,
     selectAnimal: setSelectedAnimal,
-    selectBatch: setSelectedBatch
+    selectBatch: setSelectedBatch,
+    
+    // Nuevas acciones (devuelven promesas)
+    getCertificationStandards,
+    getAnimalCertifications,
+    revokeCertification: revokeCertificationAction,
+    getAnimalHealthRecords,
+    mintAnimalNFT: mintAnimalNFTAction,
+    transferAnimal: transferAnimalAction,
+    updateAnimalHealth: updateAnimalHealthAction,
+    verifyAnimalNFT: verifyAnimalNFTAction,
+    getAnimalNFTInfo: getAnimalNFTInfoAction,
+    getAnimalBlockchainEvents: getAnimalBlockchainEventsAction,
+    getAnimalAuditTrail: getAnimalAuditTrailAction,
+    updateBatchStatus: updateBatchStatusAction,
+    addAnimalsToBatch: addAnimalsToBatchAction,
+    removeAnimalsFromBatch: removeAnimalsFromBatchAction,
+    getBatchBlockchainEvents: getBatchBlockchainEventsAction,
+    getBatchAuditTrail: getBatchAuditTrailAction,
+    searchBatches: searchBatchesAction,
+    searchAnimals: searchAnimalsAction,
+    exportAuditTrail: exportAuditTrailAction
   };
 };
 
-// Hook para selectores específicos
+// Hook para selectores específicos (mantener igual)
 export const useCattleSelectors = () => {
   const animalsByStatus = (status: string) => 
     useSelector((state: RootState) => selectAnimalsByStatus(state, status));

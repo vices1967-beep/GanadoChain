@@ -1,4 +1,20 @@
 // src/types/domain/cattle.ts
+
+// HealthStatus alineado con backend Django
+export type HealthStatus = 
+  | 'HEALTHY' 
+  | 'SICK' 
+  | 'RECOVERING' 
+  | 'UNDER_OBSERVATION' 
+  | 'QUARANTINED';
+
+// AnimalStatus alineado con backend
+export type AnimalStatus = 
+  | 'ACTIVE' 
+  | 'SOLD' 
+  | 'DECEASED' 
+  | 'QUARANTINED';
+
 export interface Animal {
   id: number;
   ear_tag: string;
@@ -7,8 +23,8 @@ export interface Animal {
   birth_date: string;
   gender: 'M' | 'F';
   weight: number;
-  health_status: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'CRITICAL';
-  status: 'ACTIVE' | 'SOLD' | 'DECEASED' | 'QUARANTINED';
+  health_status: HealthStatus;
+  status: AnimalStatus;
   location: string;
   owner: number;
   mother?: number;
@@ -23,6 +39,7 @@ export interface Animal {
   metadata?: Record<string, any>;
   batches?: number[];
   on_blockchain?: boolean;
+  current_batch?: number; // Añadido para alinear con backend
 }
 
 export interface AnimalHealthRecord {
@@ -41,6 +58,9 @@ export interface AnimalHealthRecord {
   source: 'FARMER' | 'VETERINARIAN' | 'IOT' | 'SYSTEM';
   iot_device?: string;
   created_at: string;
+  ipfs_hash?: string; // Añadido para alinear con backend
+  transaction_hash?: string; // Añadido para alinear con backend
+  blockchain_hash?: string; // Añadido para alinear con backend
 }
 
 export interface Batch {
@@ -48,9 +68,13 @@ export interface Batch {
   name: string;
   description: string;
   animals: number[];
-  created_by: number;
+  origin: string; // Añadido para alinear con backend
+  destination: string; // Añadido para alinear con backend
   status: string;
+  created_by: number;
   on_blockchain: boolean;
+  ipfs_hash?: string; // Añadido para alinear con backend
+  blockchain_tx?: string; // Añadido para alinear con backend
   created_at: string;
   updated_at: string;
 }
@@ -59,10 +83,12 @@ export interface CertificationStandard {
   id: number;
   name: string;
   description: string;
-  requirements: string[];
-  validity_period: number;
+  issuing_authority: string; // Cambiado de requirements a issuing_authority
+  validity_days: number; // Cambiado de validity_period
+  requirements?: string[]; // Mantenido por compatibilidad
   is_active: boolean;
   created_at: string;
+  updated_at: string; // Añadido para alinear con backend
 }
 
 export interface AnimalCertification {
@@ -71,13 +97,16 @@ export interface AnimalCertification {
   standard: number;
   certification_date: string;
   expiration_date: string;
-  certifying_body: string;
+  certifying_authority: string; // Cambiado de certifying_body
   certificate_number: string;
-  documents: string[];
+  evidence?: Record<string, any>; // Cambiado de documents
+  documents?: string[]; // Mantenido por compatibilidad
   status: 'ACTIVE' | 'EXPIRED' | 'REVOKED';
   revoked: boolean;
   revocation_reason?: string;
+  blockchain_hash?: string; // Añadido para alinear con backend
   created_at: string;
+  updated_at: string; // Añadido para alinear con backend
 }
 
 export interface AnimalCreateRequest {
@@ -87,7 +116,7 @@ export interface AnimalCreateRequest {
   birth_date: string;
   gender: 'M' | 'F';
   weight: number;
-  health_status: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'CRITICAL';
+  health_status: HealthStatus;
   location: string;
   owner?: number;
   mother?: number;
@@ -130,6 +159,8 @@ export interface BatchCreateRequest {
   name: string;
   description: string;
   animals: number[];
+  origin?: string; // Añadido para alinear con backend
+  destination?: string; // Añadido para alinear con backend
   status?: string;
 }
 
@@ -205,16 +236,76 @@ export interface NFTInfo {
   created_at: string;
 }
 
-// Añadir al final de src/types/domain/cattle.ts
 export interface CertificationCreateRequest {
   animal: number;
   standard: number;
   certification_date: string;
-  certifying_body: string;
+  certifying_authority: string; // Cambiado de certifying_body
   certificate_number: string;
-  documents?: string[];
+  evidence?: Record<string, any>; // Cambiado de documents
+  documents?: string[]; // Mantenido por compatibilidad
 }
 
 export interface CertificationUpdateRequest extends Partial<CertificationCreateRequest> {
   id: number;
+}
+
+// Nuevos tipos para alinear completamente con backend
+export interface BatchStatus {
+  CREATED: 'Creado';
+  IN_TRANSIT: 'En Tránsito';
+  DELIVERED: 'Entregado';
+  CANCELLED: 'Cancelado';
+  PROCESSING: 'Procesando';
+  QUALITY_CHECK: 'Control de Calidad';
+}
+
+export interface HealthRecordSource {
+  VETERINARIAN: 'Veterinario';
+  IOT_SENSOR: 'Sensor IoT';
+  FARMER: 'Granjero';
+  SYSTEM: 'Sistema Automático';
+}
+
+// Tipos para respuestas de API
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+}
+
+export interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
+// Tipos para operaciones blockchain
+export interface MintResult {
+  success: boolean;
+  message: string;
+  animal_id: number;
+  ear_tag: string;
+  token_id?: string;
+  transaction_hash?: string;
+  owner_wallet?: string;
+  nft_owner_wallet?: string;
+  mint_transaction_hash?: string;
+  error?: string;
+}
+
+export interface TransferResult {
+  success: boolean;
+  message: string;
+  transaction_hash?: string;
+  error?: string;
+}
+
+export interface HealthUpdateResult {
+  success: boolean;
+  message: string;
+  health_record_id?: number;
+  error?: string;
 }

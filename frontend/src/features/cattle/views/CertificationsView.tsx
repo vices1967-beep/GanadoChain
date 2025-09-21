@@ -8,7 +8,8 @@ import {
   Paper
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
-import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+//import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+import { useCattle } from '../../../hooks/cattle/useCattle';
 import CertificationList from '../components/CertificationList';
 
 const CertificationsView: React.FC = () => {
@@ -17,7 +18,7 @@ const CertificationsView: React.FC = () => {
     loading,
     getAnimalCertifications,
     revokeCertification
-  } = useCattleContext();
+  } = useCattle();
 
   const [selectedAnimalId] = useState<number | null>(null); // Eliminado setSelectedAnimalId
 

@@ -13,12 +13,13 @@ import {
 import {
   MedicalServices as HealthIcon
 } from '@mui/icons-material';
-import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+import { useCattle } from '../../../hooks/cattle/useCattle';
 import HealthRecords from '../components/HealthRecords';
+import { AnimalHealthRecord } from '../../../types/domain/cattle';
 
 const HealthView: React.FC = () => {
-  const { animals, getAnimals, getAnimalHealthRecords } = useCattleContext();
-  const [healthRecords, setHealthRecords] = useState<any[]>([]);
+  const { animals, getAnimals, getAnimalHealthRecords } = useCattle();
+  const [healthRecords, setHealthRecords] = useState<AnimalHealthRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAnimal] = useState<number | null>(null);
 
@@ -35,13 +36,9 @@ const HealthView: React.FC = () => {
   const loadHealthRecords = async (animalId: number) => {
     setLoading(true);
     try {
+      // getAnimalHealthRecords devuelve una acción de Redux, necesitamos await y .unwrap()
       const records = await getAnimalHealthRecords(animalId);
-      // Verificar si records es void (undefined) y manejarlo apropiadamente
-      if (records === undefined) {
-        setHealthRecords([]);
-      } else {
-        setHealthRecords(records);
-      }
+      setHealthRecords(records);
     } catch (error) {
       console.error('Error loading health records:', error);
       setHealthRecords([]);

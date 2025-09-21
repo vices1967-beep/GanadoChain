@@ -53,7 +53,7 @@ const AnimalForm: React.FC<AnimalFormProps> = ({
       birth_date: initialData?.birth_date || '',
       gender: initialData?.gender || 'M',
       weight: initialData?.weight || 0,
-      health_status: initialData?.health_status || 'GOOD',
+      health_status: initialData?.health_status || 'HEALTHY',
       location: initialData?.location || '',
       mother: initialData?.mother || undefined,
       father: initialData?.father || undefined
@@ -67,13 +67,14 @@ const AnimalForm: React.FC<AnimalFormProps> = ({
     enableReinitialize: true
   });
 
-  const healthStatusOptions = [
-    { value: 'EXCELLENT', label: 'Excelente' },
-    { value: 'GOOD', label: 'Buena' },
-    { value: 'FAIR', label: 'Regular' },
-    { value: 'POOR', label: 'Mala' },
-    { value: 'CRITICAL', label: 'Crítica' }
-  ];
+// Reemplazar las healthStatusOptions en AnimalForm.tsx
+const healthStatusOptions = [
+  { value: 'HEALTHY', label: 'Saludable' },
+  { value: 'SICK', label: 'Enfermo' },
+  { value: 'RECOVERING', label: 'Recuperándose' },
+  { value: 'UNDER_OBSERVATION', label: 'Bajo Observación' },
+  { value: 'QUARANTINED', label: 'En Cuarentena' }
+];
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>

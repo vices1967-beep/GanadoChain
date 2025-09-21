@@ -1,4 +1,4 @@
-// src/stores/selectors/cattle.selectors.ts
+// frontend/src/stores/selectors/cattle.selectors.ts
 import { createSelector } from '@reduxjs/toolkit';
 import { RootState } from '../store';
 
@@ -57,4 +57,15 @@ export const selectAnimalsByStatus = createSelector(
 export const selectAnimalsByHealth = createSelector(
   [selectAnimals, (_, healthStatus: string) => healthStatus],
   (animals, healthStatus) => animals.filter(animal => animal.health_status === healthStatus)
+);
+
+// Añadir estos nuevos selectores
+export const selectCertifications = createSelector(
+  selectCattleState,
+  (cattle) => cattle.certifications
+);
+
+export const selectCertificationStandards = createSelector(
+  selectCattleState,
+  (cattle) => cattle.certificationStandards || []
 );

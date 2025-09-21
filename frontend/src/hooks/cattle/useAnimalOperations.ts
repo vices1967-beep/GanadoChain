@@ -1,10 +1,12 @@
 // src/hooks/cattle/useAnimalOperations.ts
 import { useState } from 'react';
-import { useCattle } from './useCattle';
+import { useDispatch } from 'react-redux';
 import { Animal, AnimalCreateRequest, AnimalUpdateRequest } from '../../types/domain/cattle';
+import { createAnimal, updateAnimal, deleteAnimal } from '../../stores/slices/cattle.slice';
+import { AppDispatch } from '../../stores/store';
 
 export const useAnimalOperations = () => {
-  const cattle = useCattle();
+  const dispatch = useDispatch<AppDispatch>();
   const [operationLoading, setOperationLoading] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
 
@@ -12,11 +14,12 @@ export const useAnimalOperations = () => {
     setOperationLoading(true);
     setOperationError(null);
     try {
-      const newAnimal = await cattle.createAnimal(animalData);
-      return newAnimal;
-    } catch (error) {
-      setOperationError(cattle.error);
-      throw error;
+      const result = await dispatch(createAnimal(animalData)).unwrap();
+      return result;
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to create animal';
+      setOperationError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setOperationLoading(false);
     }
@@ -26,11 +29,12 @@ export const useAnimalOperations = () => {
     setOperationLoading(true);
     setOperationError(null);
     try {
-      const updatedAnimal = await cattle.updateAnimal(id, animalData);
-      return updatedAnimal;
-    } catch (error) {
-      setOperationError(cattle.error);
-      throw error;
+      const result = await dispatch(updateAnimal({ id, animalData })).unwrap();
+      return result;
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to update animal';
+      setOperationError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setOperationLoading(false);
     }
@@ -40,10 +44,11 @@ export const useAnimalOperations = () => {
     setOperationLoading(true);
     setOperationError(null);
     try {
-      await cattle.deleteAnimal(id);
-    } catch (error) {
-      setOperationError(cattle.error);
-      throw error;
+      await dispatch(deleteAnimal(id)).unwrap();
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to delete animal';
+      setOperationError(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setOperationLoading(false);
     }

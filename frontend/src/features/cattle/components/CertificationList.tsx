@@ -98,7 +98,7 @@ const CertificationList: React.FC<CertificationListProps> = ({
               <TableCell>
                 {new Date(certification.expiration_date).toLocaleDateString()}
               </TableCell>
-              <TableCell>{certification.certifying_body}</TableCell>
+              <TableCell>{certification.certifying_authority}</TableCell>
               <TableCell>
                 <Chip
                   label={certification.status}

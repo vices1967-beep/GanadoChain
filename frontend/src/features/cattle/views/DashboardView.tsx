@@ -13,11 +13,12 @@ import {
   Assignment as CertsIcon,
   ShowChart as StatsIcon
 } from '@mui/icons-material';
-import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+//import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+import { useCattle } from '../../../hooks/cattle/useCattle';
 import CattleStats from '../components/CattleStats';
 
 const DashboardView: React.FC = () => {
-  const { stats, getStats, animals, batches, certifications, getAnimals, getBatches } = useCattleContext();
+  const { stats, getStats, animals, batches, certifications, getAnimals, getBatches } = useCattle();
 
   useEffect(() => {
     getStats();

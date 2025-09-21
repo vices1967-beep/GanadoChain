@@ -9,7 +9,8 @@ import {
   Grid
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
-import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+//import { useCattleContext } from '../../../contexts/cattle/CattleContext';
+import { useCattle } from '../../../hooks/cattle/useCattle';
 import AnimalList from '../components/AnimalList';
 import AnimalForm from '../components/AnimalForm';
 import AnimalDetail from '../components/AnimalDetail';
@@ -25,7 +26,7 @@ const AnimalsView: React.FC = () => {
     deleteAnimal,
     stats,
     getStats
-  } = useCattleContext();
+  } = useCattle();
 
   const [formOpen, setFormOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
