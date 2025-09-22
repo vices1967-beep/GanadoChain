@@ -1,7 +1,7 @@
 // App.tsx
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Provider } from 'react-redux'; // Importar Provider de Redux
+import { Provider } from 'react-redux';
 import { AuthProvider, useAuth } from './contexts/auth/AuthContext';
 import Login from './views/auth/Login';
 import ConnectWallet from './views/auth/ConnectWallet';
@@ -10,7 +10,14 @@ import Dashboard from './views/Dashboard';
 import DashboardLayout from './components/ui/layout/DashboardLayout';
 import LoadingSpinner from './components/ui/common/LoadingSpinner';
 import './assets/styles/global.scss';
-import { store } from './stores/store'; // Importar el store de Redux
+import { store } from './stores/store';
+
+// Importar vistas de Cattle
+import AnimalsView from './features/cattle/views/AnimalsView';
+import BatchesView from './features/cattle/views/BatchesView';
+import CertificationsView from './features/cattle/views/CertificationsView';
+import HealthView from './features/cattle/views/HealthView';
+import CattleDashboard from './features/cattle/views/DashboardView';
 
 const AuthWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isLoading } = useAuth();
@@ -32,14 +39,14 @@ const AuthOnlyGuard: React.FC<{ children: React.ReactElement }> = ({ children })
   return user ? children : <Navigate to="/login" replace />;
 };
 
-// Layout para páginas que necesitan sidebar/header (como UserProfile)
+// Layout para páginas que necesitan sidebar/header
 const WithAppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <DashboardLayout>{children}</DashboardLayout>;
 };
 
 const App: React.FC = () => {
   return (
-    <Provider store={store}> {/* Envolver toda la app con Redux Provider */}
+    <Provider store={store}>
       <AuthProvider>
         <Router>
           <AuthWrapper>
@@ -48,7 +55,7 @@ const App: React.FC = () => {
               <Route path="/login" element={<Login />} />
               <Route path="/connect-wallet" element={<ConnectWallet />} />
               
-              {/* Dashboard - NO usar layout porque ya lo tiene internamente */}
+              {/* Dashboard principal */}
               <Route
                 path="/dashboard"
                 element={
@@ -57,8 +64,60 @@ const App: React.FC = () => {
                   </AuthOnlyGuard>
                 }
               />
+
+              {/* Rutas de Cattle con layout */}
+              <Route
+                path="/animals"
+                element={
+                  <AuthOnlyGuard>
+                    <WithAppLayout>
+                      <AnimalsView />
+                    </WithAppLayout>
+                  </AuthOnlyGuard>
+                }
+              />
+              <Route
+                path="/batches"
+                element={
+                  <AuthOnlyGuard>
+                    <WithAppLayout>
+                      <BatchesView />
+                    </WithAppLayout>
+                  </AuthOnlyGuard>
+                }
+              />
+              <Route
+                path="/certifications"
+                element={
+                  <AuthOnlyGuard>
+                    <WithAppLayout>
+                      <CertificationsView />
+                    </WithAppLayout>
+                  </AuthOnlyGuard>
+                }
+              />
+              <Route
+                path="/health"
+                element={
+                  <AuthOnlyGuard>
+                    <WithAppLayout>
+                      <HealthView />
+                    </WithAppLayout>
+                  </AuthOnlyGuard>
+                }
+              />
+              <Route
+                path="/cattle-dashboard"
+                element={
+                  <AuthOnlyGuard>
+                    <WithAppLayout>
+                      <CattleDashboard />
+                    </WithAppLayout>
+                  </AuthOnlyGuard>
+                }
+              />
               
-              {/* UserProfile - SÍ necesita layout */}
+              {/* UserProfile */}
               <Route
                 path="/profile"
                 element={
