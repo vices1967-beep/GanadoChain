@@ -10,6 +10,12 @@ import pandas as pd
 import numpy as np
 from datetime import timedelta
 import json
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+
+
+from .models import ConsumerAnalytics, CarbonFootprint
+from .serializers import ConsumerAnalyticsSerializer, CarbonFootprintSerializer
 
 # Importaciones corregidas desde las ubicaciones correctas
 from cattle.models import Animal, AnimalGeneticProfile, AnimalHealthRecord, Batch
@@ -20,6 +26,50 @@ from users.models import User
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+
+class ConsumerAnalyticsViewSet(viewsets.ModelViewSet):
+    queryset = ConsumerAnalytics.objects.all()
+    serializer_class = ConsumerAnalyticsSerializer
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Estadísticas generales de analítica de consumidores"""
+        total_scans = ConsumerAnalytics.objects.aggregate(
+            total=Sum('total_scans'),
+            premium=Sum('premium_upgrades')
+        )
+        
+        return Response({
+            'total_scans': total_scans['total'] or 0,
+            'total_premium_upgrades': total_scans['premium'] or 0,
+        })
+
+class CarbonFootprintViewSet(viewsets.ModelViewSet):
+    queryset = CarbonFootprint.objects.all()
+    serializer_class = CarbonFootprintSerializer
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Resumen de huella de carbono"""
+        summary = CarbonFootprint.objects.aggregate(
+            total_co2=Sum('co2_kg'),
+            avg_co2=Avg('co2_kg'),
+            count=Count('id')
+        )
+        
+        return Response(summary)
+    
+    @action(detail=False, methods=['get'])
+    def by_animal(self, request):
+        """Huella de carbono por animal"""
+        animal_id = request.query_params.get('animal_id')
+        if animal_id:
+            footprints = CarbonFootprint.objects.filter(animal_id=animal_id)
+            serializer = self.get_serializer(footprints, many=True)
+            return Response(serializer.data)
+        return Response({'error': 'animal_id parameter required'}, status=400)
 
 class GeneticAnalyticsView(APIView):
     permission_classes = [IsAuthenticated]

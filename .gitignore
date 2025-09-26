@@ -287,3 +287,10 @@ __pycache__/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# =========================
+# archivos de Starknet
+# =========================
+
+starknet/
+.sh

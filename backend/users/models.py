@@ -1,14 +1,14 @@
-# ✅ Importar validadores centralizados
-from core.models import validate_ethereum_address, validate_transaction_hash
-
-from django.contrib.auth.models import AbstractUser
+# backend/users/models.py - ACTUALIZAR el modelo existente
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils.html import format_html
 import re
+from core.models import validate_ethereum_address, validate_transaction_hash
+from .adapters.multichain_adapter import MultichainUserMixin  # ← AÑADIR IMPORT
 
-class User(AbstractUser):
+class User(MultichainUserMixin, AbstractUser):  # ← AÑADIR MultichainUserMixin
     ROLE_CHOICES = [
         ('PRODUCER', 'Productor'),
         ('VET', 'Veterinario'),
@@ -19,6 +19,7 @@ class User(AbstractUser):
         ('DAO', 'Miembro DAO'),
         ('CONSUMER', 'Consumidor'),
         ('VIEWER', 'Solo Lectura'),
+        ('CERTIFICATION_BODY', 'Organismo Certificador'),  # ← AÑADIR NUEVO ROL
     ]
     
     BLOCKCHAIN_ROLE_CHOICES = [
@@ -29,6 +30,7 @@ class User(AbstractUser):
         ('IOT_ROLE', 'Dispositivo IoT'),
         ('DAO_ROLE', 'Miembro DAO'),
         ('DEFAULT_ADMIN_ROLE', 'Administrador'),
+        ('CERTIFIER_ROLE', 'Certificador'),  # ← AÑADIR NUEVO ROL
     ]
     
     role = models.CharField(
@@ -41,7 +43,7 @@ class User(AbstractUser):
         max_length=42, 
         unique=True,
         verbose_name="Dirección Wallet",
-        validators=[validate_ethereum_address]  # ✅ VALIDADOR AÑADIDO
+        validators=[validate_ethereum_address]
     )
     blockchain_roles = models.JSONField(
         default=list,
@@ -57,6 +59,19 @@ class User(AbstractUser):
         blank=True,
         verbose_name="Fecha de Verificación"
     )
+    
+    # NUEVOS CAMPOS PARA MULTICHAIN Y CERTIFICACIÓN
+    multichain_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Multichain Habilitado"
+    )
+    last_multichain_sync = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Última Sincronización Multichain"
+    )
+    
+    # Campos existentes...
     profile_image = models.ImageField(
         upload_to='profiles/',
         null=True,
@@ -121,6 +136,7 @@ class User(AbstractUser):
             models.Index(fields=['is_blockchain_active']),
             models.Index(fields=['company']),
             models.Index(fields=['created_at']),
+            models.Index(fields=['multichain_enabled']),  # ← AÑADIR ÍNDICE
         ]
         ordering = ['-date_joined']
 
@@ -168,6 +184,55 @@ class User(AbstractUser):
             return self.blockchain_roles[0]
         return None
     
+    # NUEVAS PROPIEDADES PARA CERTIFICACIÓN
+    @property
+    def is_certification_body(self):
+        return self.role == 'CERTIFICATION_BODY' or 'CERTIFIER_ROLE' in self.blockchain_roles
+    
+    @property
+    def can_issue_certifications(self):
+        """Verificar si puede emitir certificaciones"""
+        return (self.is_certification_body or 
+                self.is_auditor or 
+                self.is_superuser)
+    
+    @property
+    def can_audit_certifications(self):
+        """Verificar si puede auditar certificaciones"""
+        return (self.is_auditor or 
+                self.is_certification_body or 
+                self.is_superuser)
+    
+    # MÉTODOS MULTICHAIN (del mixin)
+    def enable_multichain(self):
+        """Habilitar funcionalidades multichain para el usuario"""
+        self.multichain_enabled = True
+        self.save()
+        
+        # Configurar wallets automáticamente
+        self.multichain.setup_multichain_wallets()
+    
+    def get_multichain_balances(self):
+        """Obtener balances en todas las cadenas"""
+        if not self.multichain_enabled:
+            return {}
+        return self.multichain.get_balances()
+    
+    @property
+    def has_starknet_wallet(self):
+        """Verificar si tiene wallet de Starknet configurado"""
+        if hasattr(self, 'multichain_profile'):
+            return 'STARKNET_SEPOLIA' in self.multichain_profile.secondary_wallets
+        return False
+    
+    @property
+    def starknet_address(self):
+        """Obtener dirección de Starknet"""
+        if hasattr(self, 'multichain_profile'):
+            return self.multichain_profile.get_wallet_for_network('STARKNET_SEPOLIA')
+        return None
+
+    # Propiedades existentes...
     @property
     def is_producer(self):
         return self.role == 'PRODUCER' or 'PRODUCER_ROLE' in self.blockchain_roles
@@ -193,7 +258,7 @@ class User(AbstractUser):
     @property
     def can_manage_users(self):
         """Verificar si puede gestionar usuarios"""
-        return self.role in ['ADMIN', 'AUDITOR'] or self.is_superuser
+        return self.role in ['ADMIN', 'AUDITOR', 'CERTIFICATION_BODY'] or self.is_superuser
     
     @property
     def profile_completion(self):
@@ -228,6 +293,8 @@ class User(AbstractUser):
     def has_blockchain_role(self, role):
         """Verificar si tiene un rol específico en blockchain"""
         return role in self.blockchain_roles
+
+# Los demás modelos (UserActivityLog, UserPreference, APIToken) permanecen igual...
 
 class UserActivityLog(models.Model):
     """Registro de actividad de usuarios"""
@@ -413,3 +480,5 @@ class APIToken(models.Model):
     def is_expired(self):
         from django.utils import timezone
         return self.expires_at and self.expires_at < timezone.now()
+    
+from .multichain_models import UserMultichainProfile, UserBlockchainRole, UserTransactionHistory, UserAPICredentials

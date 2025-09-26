@@ -1,11 +1,32 @@
 from rest_framework import serializers 
-from .models import Animal, AnimalHealthRecord, Batch, HealthStatus, AnimalGeneticProfile, FeedingRecord
+from .models import Animal, AnimalHealthRecord, Batch, HealthStatus, AnimalGeneticProfile, FeedingRecord, BlockchainEventState, CattleAuditTrail
 from .blockchain_models import BlockchainEventState
 from .audit_models import CattleAuditTrail
 from django.contrib.auth import get_user_model
 from decimal import Decimal
+from .multichain_models import AnimalMultichain, AnimalNFTMirror
 
 User = get_user_model()
+
+
+
+
+class AnimalMultichainSerializer(serializers.ModelSerializer):
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True)
+    primary_network_name = serializers.CharField(source='primary_network.name', read_only=True)
+    
+    class Meta:
+        model = AnimalMultichain
+        fields = '__all__'
+
+class AnimalNFTMirrorSerializer(serializers.ModelSerializer):
+    animal_ear_tag = serializers.CharField(source='animal_multichain.animal.ear_tag', read_only=True)
+    network_name = serializers.CharField(source='network.name', read_only=True)
+    
+    class Meta:
+        model = AnimalNFTMirror
+        fields = '__all__'
+
 
 class AnimalSerializer(serializers.ModelSerializer):
     owner_email = serializers.EmailField(source='owner.email', read_only=True)

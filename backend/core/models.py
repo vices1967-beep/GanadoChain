@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 # En core/models.py, asegúrate de tener:
 from .metrics_models import * # ← Esta línea debe estar
 
+
 def validate_ethereum_address(value):
     """Validación completa de dirección Ethereum"""
     if not value:
@@ -38,3 +39,6 @@ def validate_ipfs_hash(value):
     
     if not re.match(r'^[Qm][1-9A-Za-z]{44}$', value):
         raise ValidationError('Hash IPFS inválido')
+    
+
+from core.starknet.models import StarknetContract, StarknetTransaction

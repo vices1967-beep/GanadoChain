@@ -1,15 +1,68 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import UserActivityLog, UserPreference, APIToken
+from .models import User, UserActivityLog, UserPreference, APIToken
 from .reputation_models import RewardDistribution, StakingPool
 from .reputation_models import UserRole, ReputationScore
-from .notification_models import Notification
+from .multichain_models import UserMultichainProfile, UserBlockchainRole, UserTransactionHistory, UserAPICredentials
 from .notification_models import Notification  # Importación correcta
 import re
 from decimal import Decimal
+from django.utils.html import format_html
+from django.utils import timezone
 
 User = get_user_model()
+
+
+
+
+class UserMultichainProfileSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    default_network_name = serializers.CharField(source='default_network.name', read_only=True)
+    
+    class Meta:
+        model = UserMultichainProfile
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
+
+class UserBlockchainRoleSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    network_name = serializers.CharField(source='network.name', read_only=True)
+    granted_by_username = serializers.CharField(source='granted_by.username', read_only=True)
+    is_expired = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = UserBlockchainRole
+        fields = '__all__'
+
+class UserTransactionHistorySerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    network_name = serializers.CharField(source='network.name', read_only=True)
+    explorer_url = serializers.CharField(read_only=True)
+    gas_cost_eth = serializers.DecimalField(max_digits=30, decimal_places=18, read_only=True)
+    
+    class Meta:
+        model = UserTransactionHistory
+        fields = '__all__'
+        read_only_fields = ['timestamp']
+
+class UserAPICredentialsSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    network_name = serializers.CharField(source='network.name', read_only=True)
+    is_expired = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = UserAPICredentials
+        fields = '__all__'
+        read_only_fields = ['created_at']
+        extra_kwargs = {
+            'api_secret': {'write_only': True},
+            'access_token': {'write_only': True},
+            'refresh_token': {'write_only': True},
+        }
+
+
 
 # users/serializers.py - Modificar EthereumAddressField
 class EthereumAddressField(serializers.CharField):

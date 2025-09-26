@@ -77,7 +77,7 @@ class CertificationStandard(models.Model):
         return "No aplica"
 
 class AnimalCertification(models.Model):
-    animal = models.ForeignKey('cattle.Animal', on_delete=models.CASCADE, related_name='certifications')
+    animal = models.ForeignKey('cattle.Animal', on_delete=models.CASCADE, related_name='animal_certifications')
     standard = models.ForeignKey(CertificationStandard, on_delete=models.CASCADE)
     certification_date = models.DateTimeField()
     expiration_date = models.DateTimeField()

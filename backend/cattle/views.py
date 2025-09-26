@@ -6,10 +6,14 @@ from rest_framework.parsers import MultiPartParser, JSONParser
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
-from .models import Animal, AnimalHealthRecord, Batch
+from django.utils import timezone
+from .models import Animal, AnimalHealthRecord, Batch, AnimalGeneticProfile, FeedingRecord
 from .blockchain_models import BlockchainEventState
-from blockchain.services import BlockchainService  # Debe estar así
+from blockchain.services import BlockchainService
 from .audit_models import CattleAuditTrail
+from .multichain_models import AnimalMultichain, AnimalNFTMirror
+from core.multichain.service import MultichainNFTService
+from core.multichain.adapter import BlockchainAdapterFactory
 from .serializers import (
     AnimalSerializer, 
     AnimalHealthRecordSerializer, 
@@ -23,7 +27,11 @@ from .serializers import (
     BatchStatusUpdateSerializer,
     AnimalHealthUpdateSerializer,
     AnimalSearchSerializer,
-    BatchSearchSerializer
+    BatchSearchSerializer,
+    AnimalGeneticProfileSerializer,
+    FeedingRecordSerializer,
+    AnimalMultichainSerializer,
+    AnimalNFTMirrorSerializer
 )
 import logging
 
@@ -289,12 +297,10 @@ class AnimalViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def blockchain_events(self, request, pk=None):
         animal = self.get_object()
-        # events = animal.blockchain_events.all().order_by('-created_at')
         try:
-            from blockchain.models import BlockchainEvent  # ✅ Importar el modelo correcto
-            events = BlockchainEvent.objects.filter(animal=animal).order_by('-created_at')  # ✅ CORRECTO
-
-        
+            from blockchain.models import BlockchainEvent
+            events = BlockchainEvent.objects.filter(animal=animal).order_by('-created_at')
+            
             from blockchain.serializers import BlockchainEventSerializer
             serializer = BlockchainEventSerializer(events, many=True)
             return Response(serializer.data)
@@ -302,13 +308,12 @@ class AnimalViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': 'Blockchain app not configured properly'
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        
         except Exception as e:
             logger.error(f"Error getting blockchain events for animal {pk}: {str(e)}")
             return Response({
                 'error': f'Error retrieving blockchain events: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+    
     @action(detail=True, methods=['get'])
     def audit_trail(self, request, pk=None):
         animal = self.get_object()
@@ -384,7 +389,6 @@ class BatchViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
     
-    # En cattle/views.py, modifica el método update_status:
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
         """Actualizar estado del lote"""
@@ -400,20 +404,15 @@ class BatchViewSet(viewsets.ModelViewSet):
             new_status = serializer.validated_data['new_status']
             notes = serializer.validated_data.get('notes', '')
             
-            # Guardar el estado anterior
             old_status = batch.status
-            
-            # Actualizar el estado
             batch.status = new_status
             batch.save()
             
-            # Registrar en blockchain si está en blockchain y el estado cambió
             if batch.on_blockchain and old_status != new_status:
                 try:
                     from blockchain.services import BlockchainService
                     service = BlockchainService()
                     
-                    # Verificar si el método existe
                     if hasattr(service, 'update_batch_status'):
                         result = service.update_batch_status(batch, new_status, notes)
                         
@@ -421,7 +420,6 @@ class BatchViewSet(viewsets.ModelViewSet):
                             logger.info(f"Batch status updated on blockchain: {batch.name}")
                         else:
                             logger.warning(f"Batch status update on blockchain failed: {result.get('error', 'Unknown error')}")
-                            # Revertir el cambio si falla en blockchain
                             batch.status = old_status
                             batch.save()
                             return Response({
@@ -434,7 +432,6 @@ class BatchViewSet(viewsets.ModelViewSet):
                         
                 except Exception as e:
                     logger.error(f"Error updating batch status on blockchain: {str(e)}")
-                    # Revertir el cambio si hay excepción
                     batch.status = old_status
                     batch.save()
                     return Response({
@@ -459,7 +456,6 @@ class BatchViewSet(viewsets.ModelViewSet):
         """Añadir animales a un lote existente"""
         batch = self.get_object()
         
-        # Validar permisos
         if batch.created_by != request.user and not request.user.is_superuser:
             return Response({
                 'error': 'No tienes permisos para modificar este lote'
@@ -473,7 +469,6 @@ class BatchViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Validar que los animales existen y pertenecen al usuario
             if request.user.is_superuser:
                 animals = Animal.objects.filter(id__in=animal_ids)
             else:
@@ -484,7 +479,6 @@ class BatchViewSet(viewsets.ModelViewSet):
                     'error': 'Algunos animales no existen o no tienes permisos'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Añadir animales al lote
             batch.animals.add(*animals)
             batch.save()
             
@@ -533,11 +527,9 @@ class BatchViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def blockchain_events(self, request, pk=None):
         batch = self.get_object()
-        # events = batch.blockchain_events.all().order_by('-created_at')
-        
         try:
-            from blockchain.models import BlockchainEvent  # ✅ Importar el modelo correcto
-            events = BlockchainEvent.objects.filter(batch=batch).order_by('-created_at')  # ✅ CORRECTO
+            from blockchain.models import BlockchainEvent
+            events = BlockchainEvent.objects.filter(batch=batch).order_by('-created_at')
             
             from blockchain.serializers import BlockchainEventSerializer
             serializer = BlockchainEventSerializer(events, many=True)
@@ -551,8 +543,7 @@ class BatchViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': f'Error retrieving blockchain events: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    # En cattle/views.py, en BatchViewSet, agrega:
+    
     @action(detail=True, methods=['get'])
     def audit_trail(self, request, pk=None):
         batch = self.get_object()
@@ -572,7 +563,6 @@ class BlockchainEventStateViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = BlockchainEventState.objects.all()
         
         if not self.request.user.is_superuser:
-            # Solo eventos relacionados con animales del usuario
             queryset = queryset.filter(
                 Q(event__animal__owner=self.request.user) |
                 Q(event__batch__created_by=self.request.user)
@@ -588,7 +578,6 @@ class CattleAuditTrailViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = CattleAuditTrail.objects.all()
         
         if not self.request.user.is_superuser:
-            # Solo auditorías relacionadas con el usuario
             queryset = queryset.filter(
                 Q(user=self.request.user) |
                 Q(object_type='animal', object_id__in=Animal.objects.filter(owner=self.request.user).values_list('id', flat=True)) |
@@ -607,6 +596,272 @@ class CattleAuditTrailViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(action_type=action_type)
             
         return queryset.order_by('-timestamp')
+
+class AnimalGeneticProfileViewSet(viewsets.ModelViewSet):
+    serializer_class = AnimalGeneticProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = AnimalGeneticProfile.objects.all()
+        
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(animal__owner=self.request.user)
+        
+        animal_id = self.request.query_params.get('animal_id')
+        if animal_id:
+            queryset = queryset.filter(animal_id=animal_id)
+            
+        return queryset
+
+class FeedingRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = FeedingRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = FeedingRecord.objects.all()
+        
+        if not self.request.user.is_staff:
+            queryset = queryset.filter(
+                Q(animal__owner=self.request.user) |
+                Q(supplier=self.request.user)
+            )
+        
+        animal_id = self.request.query_params.get('animal_id')
+        supplier_id = self.request.query_params.get('supplier_id')
+        feed_type = self.request.query_params.get('feed_type')
+        
+        if animal_id:
+            queryset = queryset.filter(animal_id=animal_id)
+        if supplier_id:
+            queryset = queryset.filter(supplier_id=supplier_id)
+        if feed_type:
+            queryset = queryset.filter(feed_type=feed_type)
+            
+        return queryset.order_by('-feeding_date')
+
+class AnimalMultichainViewSet(viewsets.ModelViewSet):
+    queryset = AnimalMultichain.objects.all()
+    serializer_class = AnimalMultichainSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.multichain_service = MultichainNFTService()
+    
+    def get_queryset(self):
+        queryset = AnimalMultichain.objects.all()
+        
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(animal__owner=self.request.user)
+        
+        network = self.request.query_params.get('network', None)
+        is_cross_chain = self.request.query_params.get('is_cross_chain', None)
+        has_primary_nft = self.request.query_params.get('has_primary_nft', None)
+        
+        if network:
+            queryset = queryset.filter(primary_network__name=network)
+        if is_cross_chain:
+            queryset = queryset.filter(is_cross_chain=is_cross_chain.lower() == 'true')
+        if has_primary_nft:
+            if has_primary_nft.lower() == 'true':
+                queryset = queryset.filter(primary_token_id__isnull=False)
+            else:
+                queryset = queryset.filter(primary_token_id__isnull=True)
+                
+        return queryset
+    
+    @action(detail=True, methods=['post'])
+    def register_on_blockchain(self, request, pk=None):
+        """Registrar animal en blockchain"""
+        animal_multichain = self.get_object()
+        
+        if not animal_multichain.animal.owner.wallet_address:
+            return Response({
+                'success': False,
+                'error': 'Animal owner does not have a wallet address'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        network_id = request.data.get('network_id')
+        
+        result = self.multichain_service.register_animal_on_blockchain(
+            animal_multichain, 
+            network_id
+        )
+        
+        if result['success']:
+            animal_multichain.refresh_from_db()
+            serializer = self.get_serializer(animal_multichain)
+            
+            return Response({
+                'success': True,
+                'message': 'Animal successfully registered on blockchain',
+                'data': serializer.data,
+                'transaction_hash': result['transaction_hash'],
+                'token_id': result['token_id'],
+                'network': result['network']
+            })
+        else:
+            return Response({
+                'success': False,
+                'error': result['error']
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def create_mirror(self, request, pk=None):
+        """Crear espejo en otra blockchain"""
+        animal_multichain = self.get_object()
+        
+        if not animal_multichain.primary_token_id:
+            return Response({
+                'success': False,
+                'error': 'Animal must have primary NFT before creating mirrors'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        network_id = request.data.get('network_id')
+        if not network_id:
+            return Response({
+                'success': False,
+                'error': 'network_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        result = self.multichain_service.create_mirror_on_network(
+            animal_multichain, 
+            network_id
+        )
+        
+        if result['success']:
+            return Response({
+                'success': True,
+                'message': f'NFT mirror created successfully on {result["network"]}',
+                'mirror_id': result['mirror_id'],
+                'transaction_hash': result['transaction_hash'],
+                'token_id': result['token_id'],
+                'network': result['network']
+            })
+        else:
+            return Response({
+                'success': False,
+                'error': result['error']
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
+    def mirrors(self, request, pk=None):
+        """Obtener todos los espejos del animal"""
+        animal_multichain = self.get_object()
+        mirrors = AnimalNFTMirror.objects.filter(animal_multichain=animal_multichain)
+        serializer = AnimalNFTMirrorSerializer(mirrors, many=True)
+        
+        return Response({
+            'count': mirrors.count(),
+            'mirrors': serializer.data
+        })
+    
+    @action(detail=True, methods=['get'])
+    def blockchain_status(self, request, pk=None):
+        """Obtener estado blockchain del animal"""
+        animal_multichain = self.get_object()
+        mirrors = AnimalNFTMirror.objects.filter(animal_multichain=animal_multichain)
+        
+        status_info = {
+            'has_primary_nft': bool(animal_multichain.primary_token_id),
+            'primary_network': animal_multichain.primary_network.name if animal_multichain.primary_network else None,
+            'primary_token_id': animal_multichain.primary_token_id,
+            'is_cross_chain': animal_multichain.is_cross_chain,
+            'mirror_count': mirrors.count(),
+            'mirrors': [
+                {
+                    'network': mirror.network.name,
+                    'token_id': mirror.token_id,
+                    'is_active': mirror.is_active,
+                    'mirror_date': mirror.mirror_date
+                }
+                for mirror in mirrors
+            ]
+        }
+        
+        return Response(status_info)
+
+class AnimalNFTMirrorViewSet(viewsets.ModelViewSet):
+    queryset = AnimalNFTMirror.objects.all()
+    serializer_class = AnimalNFTMirrorSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = AnimalNFTMirror.objects.all()
+        
+        if not self.request.user.is_superuser:
+            queryset = queryset.filter(animal_multichain__animal__owner=self.request.user)
+        
+        network = self.request.query_params.get('network', None)
+        is_active = self.request.query_params.get('is_active', None)
+        animal_id = self.request.query_params.get('animal_id', None)
+        
+        if network:
+            queryset = queryset.filter(network__name=network)
+        if is_active:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        if animal_id:
+            queryset = queryset.filter(animal_multichain__animal_id=animal_id)
+            
+        return queryset
+    
+    @action(detail=True, methods=['post'])
+    def verify(self, request, pk=None):
+        """Verificar espejo en blockchain"""
+        mirror = self.get_object()
+        
+        try:
+            adapter = BlockchainAdapterFactory.get_adapter(mirror.network)
+            nft_info = adapter.get_nft_info(mirror.token_id)
+            
+            return Response({
+                'success': True,
+                'exists': nft_info is not None,
+                'nft_info': nft_info,
+                'explorer_url': f"{mirror.network.explorer_url}/token/{mirror.token_id}"
+            })
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def sync(self, request, pk=None):
+        """Sincronizar espejo con blockchain"""
+        mirror = self.get_object()
+        
+        try:
+            adapter = BlockchainAdapterFactory.get_adapter(mirror.network)
+            nft_info = adapter.get_nft_info(mirror.token_id)
+            
+            if nft_info:
+                mirror.is_active = True
+                mirror.save()
+                
+                return Response({
+                    'success': True,
+                    'message': 'Sync completed - NFT verified and active',
+                    'last_sync': timezone.now(),
+                    'nft_info': nft_info
+                })
+            else:
+                mirror.is_active = False
+                mirror.save()
+                
+                return Response({
+                    'success': False,
+                    'message': 'Sync completed - NFT not found on blockchain',
+                    'last_sync': timezone.now(),
+                    'is_active': False
+                })
+                
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -707,48 +962,3 @@ def cattle_stats(request):
         stats['animals_by_breed'][breed] = count
     
     return Response(stats)
-
-from .models import AnimalGeneticProfile, FeedingRecord
-from .serializers import AnimalGeneticProfileSerializer, FeedingRecordSerializer
-
-class AnimalGeneticProfileViewSet(viewsets.ModelViewSet):
-    serializer_class = AnimalGeneticProfileSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        queryset = AnimalGeneticProfile.objects.all()
-        
-        if not self.request.user.is_staff:
-            queryset = queryset.filter(animal__owner=self.request.user)
-        
-        animal_id = self.request.query_params.get('animal_id')
-        if animal_id:
-            queryset = queryset.filter(animal_id=animal_id)
-            
-        return queryset
-
-class FeedingRecordViewSet(viewsets.ModelViewSet):
-    serializer_class = FeedingRecordSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        queryset = FeedingRecord.objects.all()
-        
-        if not self.request.user.is_staff:
-            queryset = queryset.filter(
-                Q(animal__owner=self.request.user) |
-                Q(supplier=self.request.user)
-            )
-        
-        animal_id = self.request.query_params.get('animal_id')
-        supplier_id = self.request.query_params.get('supplier_id')
-        feed_type = self.request.query_params.get('feed_type')
-        
-        if animal_id:
-            queryset = queryset.filter(animal_id=animal_id)
-        if supplier_id:
-            queryset = queryset.filter(supplier_id=supplier_id)
-        if feed_type:
-            queryset = queryset.filter(feed_type=feed_type)
-            
-        return queryset.order_by('-feeding_date')

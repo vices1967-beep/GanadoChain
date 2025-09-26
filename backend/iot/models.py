@@ -311,3 +311,5 @@ class DeviceConfiguration(models.Model):
     def owner(self):
         """Propiedad para compatibilidad con permisos"""
         return self.device.owner if self.device else None
+    
+    from .multichain_models import IoTDeviceMultichain, SensorDataMultichain, DeviceEventMultichain, GatewayDevice
