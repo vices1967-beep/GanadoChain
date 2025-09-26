@@ -5,6 +5,47 @@ from cattle.models import Animal
 from cattle.serializers import AnimalSerializer
 import re
 from decimal import Decimal
+from .multichain_models import IoTDeviceMultichain, SensorDataMultichain, DeviceEventMultichain, GatewayDevice
+
+class IoTDeviceMultichainSerializer(serializers.ModelSerializer):
+    owner_username = serializers.CharField(source='owner.username', read_only=True)
+    animal_ear_tag = serializers.CharField(source='animal.ear_tag', read_only=True, allow_null=True)
+    preferred_network_name = serializers.CharField(source='preferred_network.name', read_only=True)
+    is_online = serializers.BooleanField(read_only=True)
+    needs_maintenance = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = IoTDeviceMultichain
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at', 'auth_token', 'blockchain_device_id']
+
+class SensorDataMultichainSerializer(serializers.ModelSerializer):
+    device_id = serializers.CharField(source='device.device_id', read_only=True)
+    is_accurate = serializers.BooleanField(read_only=True)
+    has_anomalies = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = SensorDataMultichain
+        fields = '__all__'
+        read_only_fields = ['recorded_at']
+
+class DeviceEventMultichainSerializer(serializers.ModelSerializer):
+    device_id = serializers.CharField(source='device.device_id', read_only=True)
+    requires_immediate_action = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = DeviceEventMultichain
+        fields = '__all__'
+        read_only_fields = ['created_at']
+
+class GatewayDeviceSerializer(serializers.ModelSerializer):
+    connected_devices_count = serializers.IntegerField(read_only=True)
+    is_online = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = GatewayDevice
+        fields = '__all__'
+        read_only_fields = ['created_at']
 
 class IoTDeviceSerializer(serializers.ModelSerializer):
     device_type_display = serializers.CharField(source='get_device_type_display', read_only=True)

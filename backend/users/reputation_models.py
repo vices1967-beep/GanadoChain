@@ -109,7 +109,7 @@ class ReputationScore(models.Model):
 # Añadir al final de backend/users/reputation_models.py
 
 class RewardDistribution(models.Model):
-    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='rewards')
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='user_rewards')
     action_type = models.CharField(max_length=100)
     action_id = models.IntegerField()
     tokens_awarded = models.DecimalField(max_digits=20, decimal_places=2)

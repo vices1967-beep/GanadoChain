@@ -8,11 +8,23 @@ from dotenv import load_dotenv
 # CONFIGURACIÓN INICIAL
 # ==============================================================================
 
-# Cargar variables de entorno
-load_dotenv()
+# ==============================================================================
+# CONFIGURACIÓN INICIAL - CORREGIR ESTA PARTE
+# ==============================================================================
 
-# Build paths
-BASE_DIR = Path(__file__).resolve().parent.parent
+# CORREGIR: Especificar la ruta correcta del .env
+BASE_DIR = Path(__file__).resolve().parent.parent  # Esto apunta a /GanadoChain/backend
+env_path = BASE_DIR / '.env'  # Ruta correcta: /GanadoChain/backend/.env
+
+print(f"🔧 Cargando variables de entorno desde: {env_path}")
+print(f"🔧 El archivo .env existe: {env_path.exists()}")
+
+# Cargar variables de entorno desde la ruta correcta
+load_dotenv(env_path)
+
+# Verificar que se cargan las variables de Starknet
+print(f"✅ STARKNET_RPC_URL cargado: {bool(os.getenv('STARKNET_RPC_URL'))}")
+print(f"✅ BLOCKCHAIN_RPC_URL cargado: {bool(os.getenv('BLOCKCHAIN_RPC_URL'))}")
 
 # ==============================================================================
 # CONFIGURACIÓN DE URLS
@@ -48,7 +60,7 @@ else:
 # CONFIGURACIÓN DE BASE DE DATOS MEJORADA
 # ==============================================================================
 
-# Elegir entre SQLite (desarrollo) và PostgreSQL (producción)
+# PostgreSQL ( desarrollo y producción)
 if os.getenv('DATABASE_URL'):
     # PostgreSQL desde DATABASE_URL (para producción)
     import dj_database_url
@@ -60,17 +72,17 @@ if os.getenv('DATABASE_URL'):
         )
     }
 else:
-    # SQLite para desarrollo
+    # POSTGIS PARA DESARROLLO LOCAL (¡CORRECTO!)
     DATABASES = {
-    'default': {
-        'ENGINE': 'django.contrib.gis.db.backends.postgis',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
+        'default': {
+            'ENGINE': 'django.contrib.gis.db.backends.postgis',
+            'NAME': os.getenv('DB_NAME'),
+            'USER': os.getenv('DB_USER'),
+            'PASSWORD': os.getenv('DB_PASSWORD'),
+            'HOST': os.getenv('DB_HOST'),
+            'PORT': os.getenv('DB_PORT'),
+        }
     }
-}
 
 # ==============================================================================
 # APLICACIONES Y MIDDLEWARE
@@ -105,6 +117,7 @@ INSTALLED_APPS = [
     'rewards',
     'analytics',
     'reports',
+    'certification',
 ]
 
 MIDDLEWARE = [
@@ -207,9 +220,19 @@ SIMPLE_JWT = {
 # ==============================================================================
 
 # Validación de direcciones de contratos
+# ==============================================================================
+# CONFIGURACIÓN BLOCKCHAIN MEJORADA - AÑADIR STARKNET
+# ==============================================================================
+
+# Validación de direcciones de contratos
 def validate_ethereum_address(address):
-    if address and not address.startswith('0x'):
+    if address and address != '' and not address.startswith('0x'):
         raise ValueError(f"Dirección Ethereum inválida: {address}")
+    return address
+
+def validate_starknet_address(address):
+    if address and address != '' and not address.startswith('0x'):
+        raise ValueError(f"Dirección Starknet inválida: {address}")
     return address
 
 BLOCKCHAIN_CONFIG = {
@@ -224,13 +247,40 @@ BLOCKCHAIN_CONFIG = {
     },
     'ADMIN_WALLET': validate_ethereum_address(os.getenv('ADMIN_WALLET_ADDRESS')),
     'SAFE_ADDRESSES': [
-        validate_ethereum_address(os.getenv('SAFE_DEPLOYER1')),
-        validate_ethereum_address(os.getenv('SAFE_DEPLOYER2')),
-        validate_ethereum_address(os.getenv('SAFE_DEPLOYER3')),
+        validate_ethereum_address(os.getenv('SAFE_DEPLOYER1', '')),
+        validate_ethereum_address(os.getenv('SAFE_DEPLOYER2', '')),
+        validate_ethereum_address(os.getenv('SAFE_DEPLOYER3', '')),
     ],
     'API_KEYS': {
         'ETHERSCAN': os.getenv('ETHERSCAN_API_KEY'),
         'IPFS_URL': os.getenv('IPFS_API_URL', '/ip4/127.0.0.1/tcp/5001'),
+    }
+}
+
+# AÑADIR CONFIGURACIÓN STARKNET
+STARKNET_CONFIG = {
+    'NETWORK': os.getenv('STARKNET_NETWORK', 'sepolia'),
+    'RPC_URL1': os.getenv('STARKNET_RPC_URL1', 'https://sepolia.starknet.io'),
+    'RPC_URL': os.getenv('STARKNET_RPC_URL', 'https://starknet-sepolia.infura.io/v3/5e66662444bb43dbbce887f21f69c894'),
+    'EXPLORER_URL': os.getenv('STARKNET_EXPLORER_URL', 'https://sepolia.starkscan.co'),
+    'ACCOUNT_ADDRESS': validate_starknet_address(os.getenv('STARKNET_ACCOUNT_ADDRESS')),
+    'PRIVATE_KEY': os.getenv('STARKNET_PRIVATE_KEY'),
+    'PUBLIC_KEY': os.getenv('STARKNET_PUBLIC_KEY'),
+    'CONTRACTS': {
+        'NFT_PROXY': validate_starknet_address(os.getenv('STARKNET_NFT_PROXY_ADDRESS')),
+        'NFT_IMPLEMENTATION': validate_starknet_address(os.getenv('STARKNET_NFT_IMPLEMENTATION_ADDRESS')),
+        'REGISTRY_PROXY': validate_starknet_address(os.getenv('STARKNET_REGISTRY_PROXY_ADDRESS')),
+        'REGISTRY_IMPLEMENTATION': validate_starknet_address(os.getenv('STARKNET_REGISTRY_IMPLEMENTATION_ADDRESS')),
+    }
+}
+
+# CONFIGURACIÓN MULTICHAIN
+MULTICHAIN_CONFIG = {
+    'DEFAULT_BLOCKCHAIN': os.getenv('DEFAULT_BLOCKCHAIN', 'POLYGON'),
+    'ENABLED_BLOCKCHAINS': [chain.strip() for chain in os.getenv('ENABLED_BLOCKCHAINS', 'POLYGON,STARKNET').split(',')],
+    'BLOCKCHAINS': {
+        'POLYGON': BLOCKCHAIN_CONFIG,
+        'STARKNET': STARKNET_CONFIG
     }
 }
 
@@ -439,3 +489,43 @@ INSTALLED_APPS += [
 # Blockchain Configuration
 WEB3_PROVIDER = os.environ.get('WEB3_PROVIDER_URL', 'https://rpc-amoy.polygon.technology')
 CONTRACT_ADDRESS = os.environ.get('CONTRACT_ADDRESS', '0x04eF92BB7C1b3CDC22e941cEAB2206311C57ef68')
+
+
+# ==============================================================================
+# VARIABLES DIRECTAS PARA COMPATIBILIDAD - CORRECCIONES FINALES
+# ==============================================================================
+
+# Variables directas para compatibilidad con código existente
+BLOCKCHAIN_RPC_URL = BLOCKCHAIN_CONFIG['RPC_URL']
+STARKNET_RPC_URL = STARKNET_CONFIG['RPC_URL']
+WEB3_PROVIDER_URL = BLOCKCHAIN_CONFIG['RPC_URL']
+CONTRACT_ADDRESS = BLOCKCHAIN_CONFIG['CONTRACTS']['ANIMAL_NFT']
+
+# Configuración adicional para evitar errores
+BLOCKCHAIN_NETWORK = BLOCKCHAIN_CONFIG['NETWORK']
+CHAIN_ID = BLOCKCHAIN_CONFIG['CHAIN_ID']
+EXPLORER_URL = BLOCKCHAIN_CONFIG['EXPLORER_URL']
+GANADO_TOKEN_ADDRESS = BLOCKCHAIN_CONFIG['CONTRACTS']['GANADO_TOKEN']
+ANIMAL_NFT_ADDRESS = BLOCKCHAIN_CONFIG['CONTRACTS']['ANIMAL_NFT']
+REGISTRY_ADDRESS = BLOCKCHAIN_CONFIG['CONTRACTS']['REGISTRY']
+ADMIN_WALLET_ADDRESS = BLOCKCHAIN_CONFIG['ADMIN_WALLET']
+
+# Variables críticas del .env
+ADMIN_PRIVATE_KEY = os.getenv('ADMIN_PRIVATE_KEY')
+INFURA_PROJECT_ID = os.getenv('INFURA_PROJECT_ID')
+IPFS_API_URL = os.getenv('IPFS_API_URL', '/ip4/127.0.0.1/tcp/5001')
+IOT_API_KEY = os.getenv('IOT_API_KEY', 'default-iot-key')
+
+# Safe addresses
+SAFE_ADDRESSES = [
+    os.getenv('SAFE_DEPLOYER1'),
+    os.getenv('SAFE_DEPLOYER2'), 
+    os.getenv('SAFE_DEPLOYER3')
+]
+
+# Starknet configuration
+STARKNET_ACCOUNT_ADDRESS = os.getenv('STARKNET_ACCOUNT_ADDRESS')
+STARKNET_PRIVATE_KEY = os.getenv('STARKNET_PRIVATE_KEY')
+STARKNET_PUBLIC_KEY = os.getenv('STARKNET_PUBLIC_KEY')
+
+print("✅ Todas las variables de compatibilidad cargadas correctamente")

@@ -1,13 +1,46 @@
 [package]
-name = "starknet_contracts"
-version = "0.1.0"
-edition = "2023_11" 
-
+name = "ganadochain"
+version = "1.0.0"
+edition = "2023_11"
+description = "GanadoChain - Cross-chain livestock tracking system with Starknet, Polygon and Bitcoin integration"
+authors = ["GanadoChain Team"]
+license = "MIT"
+repository = "https://github.com/ganadochain/contracts"
 
 [dependencies]
-starknet = ">=2.3.0"
-# openzeppelin = { git = "https://github.com/OpenZeppelin/cairo-contracts.git", tag = "v0.14.0" }
+starknet = "2.3.0"
 
 [[target.starknet-contract]]
-sierra = true
-casm = true
+
+[tool.sncast]
+account = "my_wallet"
+url = "https://sepolia.starknet.io"
+chain_id = "SN_SEPOLIA"
+accounts-file = "~/.starknet_accounts/starknet_open_zeppelin_accounts.json"
+
+# Configuraciones adicionales para diferentes redes
+[tool.sncast.sepolia]
+url = "https://sepolia.starknet.io"
+chain_id = "SN_SEPOLIA"
+
+[tool.sncast.mainnet]
+url = "https://starknet-mainnet.public.blastapi.io"
+chain_id = "SN_MAIN"
+
+[tool.sncast.devnet]
+url = "http://localhost:5050"
+chain_id = "SN_GOERLI"
+
+# Perfiles de construcción
+[profile.release]
+opt-level = 3
+debug = false
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[metadata]
+documentation = "https://docs.ganadochain.com"
+keywords = ["nft", "bridge", "cross-chain", "livestock", "starknet", "polygon"]
+categories = ["bridge", "nft", "defi"]

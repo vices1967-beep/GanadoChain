@@ -5,56 +5,55 @@ mod GanadoRegistry {
 
     #[storage]
     struct Storage {
-        admin: ContractAddress,
-        next_lote_id: u128,
-        lote_to_hash: LegacyMap::<u128, felt252>,      // lote_id -> data hash
-        lote_to_address: LegacyMap::<u128, felt252>,   // lote_id -> btc address
+        owner: ContractAddress,
+        next_animal_id: u128,
+        polygon_to_starknet_animal: LegacyMap<u128, u128>,
     }
 
     #[event]
-    #[derive(Drop, Debug)]
+    #[derive(Drop, starknet::Event)]
     enum Event {
-        LoteCertified: LoteCertified,
+        AnimalMigrated: AnimalMigrated,
     }
 
-    #[derive(Drop, Debug, starknet::Event)]
-    struct LoteCertified {
-        lote_id: u128,
-        btc_address: felt252,
-        data_hash: felt252,
+    #[derive(Drop, starknet::Event)]
+    struct AnimalMigrated {
+        polygon_id: u128,
+        starknet_id: u128,
+        owner: ContractAddress,
     }
 
     #[constructor]
     fn constructor(ref self: ContractState) {
-        self.admin.write(get_caller_address());
-        self.next_lote_id.write(1);
+        self.owner.write(get_caller_address());
+        self.next_animal_id.write(1);
     }
 
-    #[external]
-    fn request_btc_certification(
+    #[external(v0)]
+    fn migrate_animal_from_polygon(
         ref self: ContractState,
-        btc_address: felt252,
-        data_hash: felt252
+        polygon_id: u128,
+        owner: ContractAddress
     ) -> u128 {
-        let lote_id = self.next_lote_id.read();
-        self.next_lote_id.write(lote_id + 1);
+        let caller = get_caller_address();
+        let contract_owner = self.owner.read();
+        assert(caller == contract_owner, 'No owner');
 
-        self.lote_to_hash.write(lote_id, data_hash);
-        self.lote_to_address.write(lote_id, btc_address);
+        let starknet_id = self.next_animal_id.read();
+        self.next_animal_id.write(starknet_id + 1);
+        self.polygon_to_starknet_animal.write(polygon_id, starknet_id);
 
-        self.emit(LoteCertified {
-            lote_id,
-            btc_address,
-            data_hash,
+        self.emit(AnimalMigrated {
+            polygon_id: polygon_id,
+            starknet_id: starknet_id,
+            owner: owner,
         });
 
-        lote_id
+        starknet_id
     }
 
-    #[view]
-    fn get_certification_data(self: @ContractState, lote_id: u128) -> (felt252, felt252) {
-        let hash = self.lote_to_hash.read(lote_id);
-        let addr = self.lote_to_address.read(lote_id);
-        (hash, addr)
+    #[external(v0)]
+    fn get_stats(self: @ContractState) -> u128 {
+        self.next_animal_id.read() - 1
     }
 }

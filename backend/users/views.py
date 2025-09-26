@@ -638,3 +638,25 @@ class WalletConnectView(APIView):
                 {'error': f'Error connecting wallet: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+from .multichain_models import UserMultichainProfile, UserBlockchainRole, UserTransactionHistory, UserAPICredentials
+from .serializers import (
+    UserMultichainProfileSerializer, UserBlockchainRoleSerializer,
+    UserTransactionHistorySerializer, UserAPICredentialsSerializer
+)
+
+class UserMultichainProfileViewSet(viewsets.ModelViewSet):
+    queryset = UserMultichainProfile.objects.all()
+    serializer_class = UserMultichainProfileSerializer
+
+class UserBlockchainRoleViewSet(viewsets.ModelViewSet):
+    queryset = UserBlockchainRole.objects.all()
+    serializer_class = UserBlockchainRoleSerializer
+
+class UserTransactionHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = UserTransactionHistory.objects.all()
+    serializer_class = UserTransactionHistorySerializer
+
+class UserAPICredentialsViewSet(viewsets.ModelViewSet):
+    queryset = UserAPICredentials.objects.all()
+    serializer_class = UserAPICredentialsSerializer

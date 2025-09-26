@@ -509,3 +509,8 @@ class FeedingRecord(models.Model):
 
 #     def __str__(self):
 #         return self.name
+
+# En cattle/models.py - AL FINAL:
+from .multichain_models import AnimalMultichain, AnimalNFTMirror
+from .blockchain_models import BlockchainEventState, CertificationStandard, AnimalCertification
+from .audit_models import CattleAuditTrail
